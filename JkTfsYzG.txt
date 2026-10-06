@@ -1,0 +1,686 @@
+-- Services
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+-- YouTube Channel Link
+local YOUTUBE_URL = "https://youtube.com/@roubalix?si=38q34w9nWlN19Xz4"
+
+-- Character Handling
+local character = player.Character or player.CharacterAdded:Wait()
+player.CharacterAdded:Connect(function(newChar)
+character = newChar
+end)
+
+-- Locate Crates folder safely
+local cratesFolder = Workspace:WaitForChild("Crates", 5)
+if not cratesFolder then
+warn("Could not find workspace.Crates!")
+return
+end
+
+-- Rarity Priority & Color Palette
+local RARITY_ORDER = {
+["Blessinghalo"] = 1,
+["Admin"] = 2,
+["Divine"] = 3,
+["Eternal"] = 4,
+["Secret"] = 5,
+["Cosmic"] = 6,
+["Mythic"] = 7,
+["Legendary"] = 8,
+["Epic"] = 9,
+["Rare"] = 10,
+["Uncommon"] = 11,
+["Common"] = 12
+}
+
+local RARITY_COLORS = {
+["Blessinghalo"] = Color3.fromRGB(255, 215, 0),
+["Secret"] = Color3.fromRGB(0, 255, 200),
+["Godly"] = Color3.fromRGB(255, 50, 50),
+["Mythic"] = Color3.fromRGB(255, 0, 128),
+["Legendary"] = Color3.fromRGB(255, 170, 0),
+["Epic"] = Color3.fromRGB(170, 0, 255),
+["Rare"] = Color3.fromRGB(0, 150, 255),
+["Uncommon"] = Color3.fromRGB(85, 255, 127),
+["Common"] = Color3.fromRGB(180, 180, 180)
+}
+
+local function getCrateRarity(crateName)
+local lowerName = crateName:lower()
+for rarity, _ in pairs(RARITY_ORDER) do
+if lowerName:find(rarity:lower()) then
+return rarity
+end
+end
+return "Common"
+end
+
+-- Halo Detection Function (Detects 3D halo models, visual effects, highlights, or attachments)
+local function hasHaloEffect(crate)
+if crate:FindFirstChild("Halo", true) or crate:FindFirstChild("halo", true) then
+return true
+end
+
+for _, child in ipairs(crate:GetDescendants()) do
+if child:IsA("ParticleEmitter") or child:IsA("Beam") or child:IsA("Highlight") or child:IsA("PointLight") then
+local name = child.Name:lower()
+if name:find("halo") or name:find("blessing") or name:find("yellow") then
+return true
+end
+end
+if child:IsA("BasePart") or child:IsA("MeshPart") then
+if child.Name:lower():find("halo") then
+return true
+end
+end
+end
+return false
+end
+
+-- State variables
+local safeZoneCFrame = nil
+local isSelectingSafeZone = false
+
+-- Helper function to make frames draggable
+local function makeDraggable(gui)
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+local delta = input.Position - dragStart
+gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+gui.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+dragging = true
+dragStart = input.Position
+startPos = gui.Position
+
+input.Changed:Connect(function()
+if input.UserInputState == Enum.UserInputState.End then
+dragging = false
+end
+end)
+end
+end)
+
+gui.InputChanged:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+dragInput = input
+end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+if input == dragInput and dragging then
+update(input)
+end
+end)
+end
+
+-- ScreenGui Setup
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CrateAutoStealGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Main Draggable Container Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 310, 0, 560)
+mainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+makeDraggable(mainFrame)
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(60, 60, 80)
+mainStroke.Thickness = 1.5
+mainStroke.Parent = mainFrame
+
+-- Header Frame (Title Bar)
+local headerFrame = Instance.new("Frame")
+headerFrame.Size = UDim2.new(1, 0, 0, 42)
+headerFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+headerFrame.BorderSizePixel = 0
+headerFrame.Parent = mainFrame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 10)
+headerCorner.Parent = headerFrame
+
+local headerFix = Instance.new("Frame")
+headerFix.Size = UDim2.new(1, 0, 0, 10)
+headerFix.Position = UDim2.new(0, 0, 1, -10)
+headerFix.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+headerFix.BorderSizePixel = 0
+headerFix.Parent = headerFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -90, 1, 0)
+titleLabel.Position = UDim2.new(0, 12, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Text = "⚡ ROUBALIX HUB"
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = headerFrame
+
+-- YouTube Channel Button in Header
+local ytBtn = Instance.new("TextButton")
+ytBtn.Name = "YouTubeBtn"
+ytBtn.Size = UDim2.new(0, 32, 0, 26)
+ytBtn.Position = UDim2.new(1, -70, 0, 8)
+ytBtn.BackgroundColor3 = Color3.fromRGB(230, 33, 23)
+ytBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ytBtn.TextSize = 12
+ytBtn.Font = Enum.Font.GothamBold
+ytBtn.Text = "▶"
+ytBtn.Parent = headerFrame
+
+local ytCorner = Instance.new("UICorner")
+ytCorner.CornerRadius = UDim.new(0, 6)
+ytCorner.Parent = ytBtn
+
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 26, 0, 26)
+minimizeBtn.Position = UDim2.new(1, -32, 0, 8)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeBtn.TextSize = 14
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.Text = "—"
+minimizeBtn.Parent = headerFrame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minimizeBtn
+
+-- Content Holder
+local contentHolder = Instance.new("Frame")
+contentHolder.Name = "ContentHolder"
+contentHolder.Size = UDim2.new(1, -20, 1, -50)
+contentHolder.Position = UDim2.new(0, 10, 0, 45)
+contentHolder.BackgroundTransparency = 1
+contentHolder.Parent = mainFrame
+
+-- YouTube Banner Frame
+local ytBanner = Instance.new("TextButton")
+ytBanner.Name = "YouTubeBanner"
+ytBanner.Size = UDim2.new(1, 0, 0, 32)
+ytBanner.Position = UDim2.new(0, 0, 0, 0)
+ytBanner.BackgroundColor3 = Color3.fromRGB(35, 18, 22)
+ytBanner.AutoButtonColor = true
+ytBanner.Text = ""
+ytBanner.Parent = contentHolder
+
+local bannerCorner = Instance.new("UICorner")
+bannerCorner.CornerRadius = UDim.new(0, 8)
+bannerCorner.Parent = ytBanner
+
+local bannerStroke = Instance.new("UIStroke")
+bannerStroke.Color = Color3.fromRGB(230, 33, 23)
+bannerStroke.Thickness = 1
+bannerStroke.Parent = ytBanner
+
+local ytBannerIcon = Instance.new("TextLabel")
+ytBannerIcon.Size = UDim2.new(0, 24, 1, 0)
+ytBannerIcon.Position = UDim2.new(0, 8, 0, 0)
+ytBannerIcon.BackgroundTransparency = 1
+ytBannerIcon.TextColor3 = Color3.fromRGB(255, 50, 50)
+ytBannerIcon.TextSize = 14
+ytBannerIcon.Font = Enum.Font.GothamBold
+ytBannerIcon.Text = "▶"
+ytBannerIcon.Parent = ytBanner
+
+local ytBannerText = Instance.new("TextLabel")
+ytBannerText.Size = UDim2.new(1, -40, 1, 0)
+ytBannerText.Position = UDim2.new(0, 32, 0, 0)
+ytBannerText.BackgroundTransparency = 1
+ytBannerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ytBannerText.TextSize = 11
+ytBannerText.Font = Enum.Font.GothamBold
+ytBannerText.Text = "Subscribe to Roubalix on YouTube!"
+ytBannerText.TextXAlignment = Enum.TextXAlignment.Left
+ytBannerText.Parent = ytBanner
+
+-- YouTube Redirect Function
+local function openYouTubeChannel()
+pcall(function()
+GuiService:OpenBrowserWindow(YOUTUBE_URL)
+end)
+pcall(function()
+if setclipboard then
+setclipboard(YOUTUBE_URL)
+end
+end)
+ytBannerText.Text = "✓ Channel Link Opened / Copied!"
+task.wait(1.5)
+ytBannerText.Text = "Subscribe to Roubalix on YouTube!"
+end
+
+ytBtn.MouseButton1Click:Connect(openYouTubeChannel)
+ytBanner.MouseButton1Click:Connect(openYouTubeChannel)
+
+-- Stats Container Panel
+local statsPanel = Instance.new("Frame")
+statsPanel.Name = "StatsPanel"
+statsPanel.Size = UDim2.new(1, 0, 0, 110)
+statsPanel.Position = UDim2.new(0, 0, 0, 38)
+statsPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+statsPanel.BorderSizePixel = 0
+statsPanel.Parent = contentHolder
+
+local statsCorner = Instance.new("UICorner")
+statsCorner.CornerRadius = UDim.new(0, 8)
+statsCorner.Parent = statsPanel
+
+local statsStroke = Instance.new("UIStroke")
+statsStroke.Color = Color3.fromRGB(45, 45, 60)
+statsStroke.Thickness = 1
+statsStroke.Parent = statsPanel
+
+-- Stat Labels
+local playerStatLabel = Instance.new("TextLabel")
+playerStatLabel.Size = UDim2.new(0.5, -8, 0, 18)
+playerStatLabel.Position = UDim2.new(0, 8, 0, 8)
+playerStatLabel.BackgroundTransparency = 1
+playerStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+playerStatLabel.TextSize = 11
+playerStatLabel.Font = Enum.Font.GothamSemibold
+playerStatLabel.Text = "👤 Players: --/--"
+playerStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+playerStatLabel.Parent = statsPanel
+
+local cratesStatLabel = Instance.new("TextLabel")
+cratesStatLabel.Size = UDim2.new(0.5, -8, 0, 18)
+cratesStatLabel.Position = UDim2.new(0.5, 0, 0, 8)
+cratesStatLabel.BackgroundTransparency = 1
+cratesStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+cratesStatLabel.TextSize = 11
+cratesStatLabel.Font = Enum.Font.GothamSemibold
+cratesStatLabel.Text = "📦 Map Crates: --"
+cratesStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+cratesStatLabel.Parent = statsPanel
+
+local bestRarityLabel = Instance.new("TextLabel")
+bestRarityLabel.Size = UDim2.new(0.5, -8, 0, 18)
+bestRarityLabel.Position = UDim2.new(0, 8, 0, 28)
+bestRarityLabel.BackgroundTransparency = 1
+bestRarityLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+bestRarityLabel.TextSize = 11
+bestRarityLabel.Font = Enum.Font.GothamSemibold
+bestRarityLabel.Text = "🔥 Top Crate: None"
+bestRarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+bestRarityLabel.Parent = statsPanel
+
+local fpsStatLabel = Instance.new("TextLabel")
+fpsStatLabel.Size = UDim2.new(0.5, -8, 0, 18)
+fpsStatLabel.Position = UDim2.new(0.5, 0, 0, 28)
+fpsStatLabel.BackgroundTransparency = 1
+fpsStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+fpsStatLabel.TextSize = 11
+fpsStatLabel.Font = Enum.Font.GothamSemibold
+fpsStatLabel.Text = "⚡ FPS: --"
+fpsStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+fpsStatLabel.Parent = statsPanel
+
+local pingStatLabel = Instance.new("TextLabel")
+pingStatLabel.Size = UDim2.new(0.5, -8, 0, 18)
+pingStatLabel.Position = UDim2.new(0, 8, 0, 48)
+pingStatLabel.BackgroundTransparency = 1
+pingStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+pingStatLabel.TextSize = 11
+pingStatLabel.Font = Enum.Font.GothamSemibold
+pingStatLabel.Text = "📶 Ping: -- ms"
+pingStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+pingStatLabel.Parent = statsPanel
+
+local safeDistanceLabel = Instance.new("TextLabel")
+safeDistanceLabel.Size = UDim2.new(0.5, -8, 0, 18)
+safeDistanceLabel.Position = UDim2.new(0.5, 0, 0, 48)
+safeDistanceLabel.BackgroundTransparency = 1
+safeDistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+safeDistanceLabel.TextSize = 11
+safeDistanceLabel.Font = Enum.Font.GothamSemibold
+safeDistanceLabel.Text = "🛡️ Safezone: Unset"
+safeDistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+safeDistanceLabel.Parent = statsPanel
+
+local posStatLabel = Instance.new("TextLabel")
+posStatLabel.Size = UDim2.new(1, -16, 0, 18)
+posStatLabel.Position = UDim2.new(0, 8, 0, 82)
+posStatLabel.BackgroundTransparency = 1
+posStatLabel.TextColor3 = Color3.fromRGB(150, 150, 170)
+posStatLabel.TextSize = 10
+posStatLabel.Font = Enum.Font.Gotham
+posStatLabel.Text = "📍 Pos: X: 0 Y: 0 Z: 0"
+posStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+posStatLabel.Parent = statsPanel
+
+-- Safe Zone Button UI
+local safeZoneBtn = Instance.new("TextButton")
+safeZoneBtn.Name = "SafeZoneBtn"
+safeZoneBtn.Size = UDim2.new(1, 0, 0, 36)
+safeZoneBtn.Position = UDim2.new(0, 0, 0, 154)
+safeZoneBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+safeZoneBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+safeZoneBtn.TextSize = 13
+safeZoneBtn.Font = Enum.Font.GothamSemibold
+safeZoneBtn.Text = "📍 Set Safe Zone: [ Not Set ]"
+safeZoneBtn.Parent = contentHolder
+
+local safeCorner = Instance.new("UICorner")
+safeCorner.CornerRadius = UDim.new(0, 8)
+safeCorner.Parent = safeZoneBtn
+
+-- Scrolling List for Crates
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Name = "CrateList"
+scrollingFrame.Size = UDim2.new(1, 0, 1, -198)
+scrollingFrame.Position = UDim2.new(0, 0, 0, 198)
+scrollingFrame.BackgroundTransparency = 1
+scrollingFrame.BorderSizePixel = 0
+scrollingFrame.ScrollBarThickness = 4
+scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 110)
+scrollingFrame.Parent = contentHolder
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Parent = scrollingFrame
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+uiListLayout.Padding = UDim.new(0, 6)
+
+uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, uiListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- Minimize Functionality
+local isMinimized = false
+minimizeBtn.MouseButton1Click:Connect(function()
+isMinimized = not isMinimized
+if isMinimized then
+minimizeBtn.Text = "+"
+contentHolder.Visible = false
+mainFrame.Size = UDim2.new(0, 310, 0, 42)
+else
+minimizeBtn.Text = "—"
+contentHolder.Visible = true
+mainFrame.Size = UDim2.new(0, 310, 0, 560)
+end
+end)
+
+-- Safe Zone Selector
+safeZoneBtn.MouseButton1Click:Connect(function()
+isSelectingSafeZone = true
+safeZoneBtn.Text = "Click anywhere to save location..."
+safeZoneBtn.BackgroundColor3 = Color3.fromRGB(230, 140, 0)
+end)
+
+mouse.Button1Down:Connect(function()
+if isSelectingSafeZone then
+isSelectingSafeZone = false
+local hrp = character and character:FindFirstChild("HumanoidRootPart")
+if hrp then
+safeZoneCFrame = hrp.CFrame
+safeZoneBtn.Text = "✓ Safe Zone Saved!"
+safeZoneBtn.BackgroundColor3 = Color3.fromRGB(35, 160, 80)
+end
+end
+end)
+
+-- Steal Action
+local function stealCrate(crate, btn)
+local hrp = character and character:FindFirstChild("HumanoidRootPart")
+if not hrp then return end
+
+if not safeZoneCFrame then
+safeZoneBtn.Text = "⚠️ Set Safe Zone First!"
+safeZoneBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+task.wait(1)
+safeZoneBtn.Text = "📍 Set Safe Zone: [ Not Set ]"
+safeZoneBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+return
+end
+
+if not crate or not crate.Parent then return end
+
+local targetPart = crate:IsA("Model") and (crate.PrimaryPart or crate:FindFirstChildWhichIsA("BasePart")) or (crate:IsA("BasePart") and crate)
+if not targetPart then return end
+
+btn.Text = "Stealing..."
+btn.BackgroundColor3 = Color3.fromRGB(200, 140, 0)
+
+-- 1. Teleport to crate position
+hrp.CFrame = targetPart.CFrame * CFrame.new(0, 0, 1.5)
+
+task.wait(1.2)
+
+-- 2. Instant Prompt Trigger
+for _, prompt in ipairs(crate:GetDescendants()) do
+if prompt:IsA("ProximityPrompt") then
+prompt.HoldDuration = 0
+prompt.MaxActivationDistance = 9999
+pcall(function()
+fireproximityprompt(prompt)
+end)
+end
+end
+
+task.wait(0.8)
+
+-- 3. Teleport back to Safe Zone
+hrp.CFrame = safeZoneCFrame
+
+btn.Text = "Done!"
+btn.BackgroundColor3 = Color3.fromRGB(35, 160, 80)
+task.wait(1)
+if btn and btn.Parent then
+btn.Text = "TP & Steal"
+btn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+end
+end
+
+-- Refresh UI & Sort by Rarity
+local function refreshCrateList()
+for _, child in ipairs(scrollingFrame:GetChildren()) do
+if child:IsA("Frame") then
+child:Destroy()
+end
+end
+
+local crateList = {}
+local bestRank = 99
+local bestRarityName = "None"
+
+for _, crate in ipairs(cratesFolder:GetChildren()) do
+local targetPart = crate:IsA("Model") and (crate.PrimaryPart or crate:FindFirstChildWhichIsA("BasePart")) or (crate:IsA("BasePart") and crate)
+if targetPart then
+local rarity = getCrateRarity(crate.Name)
+local isHaloCrate = hasHaloEffect(crate) or rarity == "Blessinghalo"
+local rank = isHaloCrate and 0 or (RARITY_ORDER[rarity] or 99)
+
+if isHaloCrate then
+rarity = "Blessinghalo"
+end
+
+if rank < bestRank then
+bestRank = rank
+bestRarityName = rarity
+end
+
+table.insert(crateList, {
+Crate = crate,
+Rarity = rarity,
+Priority = rank,
+HasHalo = isHaloCrate
+})
+end
+end
+
+-- Update Crate & Map Stats
+cratesStatLabel.Text = "📦 Map Crates: " .. #crateList
+bestRarityLabel.Text = "🔥 Top: " .. bestRarityName
+if RARITY_COLORS[bestRarityName] then
+bestRarityLabel.TextColor3 = RARITY_COLORS[bestRarityName]
+else
+bestRarityLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+end
+
+-- Sort crates based on priority rank
+table.sort(crateList, function(a, b)
+return a.Priority < b.Priority
+end)
+
+-- Render Rows
+for _, item in ipairs(crateList) do
+local crate = item.Crate
+local rarity = item.Rarity
+local tagColor = RARITY_COLORS[rarity] or RARITY_COLORS["Common"]
+
+local row = Instance.new("Frame")
+row.Name = crate.Name .. "_Row"
+row.Size = UDim2.new(1, 0, 0, 38)
+row.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+row.BorderSizePixel = 0
+row.Parent = scrollingFrame
+
+local rowCorner = Instance.new("UICorner")
+rowCorner.CornerRadius = UDim.new(0, 6)
+rowCorner.Parent = row
+
+-- Rarity Indicator Strip
+local indicator = Instance.new("Frame")
+indicator.Size = UDim2.new(0, 4, 1, -12)
+indicator.Position = UDim2.new(0, 6, 0, 6)
+indicator.BackgroundColor3 = tagColor
+indicator.BorderSizePixel = 0
+indicator.Parent = row
+
+local indCorner = Instance.new("UICorner")
+indCorner.CornerRadius = UDim.new(0, 4)
+indCorner.Parent = indicator
+
+-- Name & Rarity Label
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Size = UDim2.new(1, -120, 1, 0)
+nameLabel.Position = UDim2.new(0, 16, 0, 0)
+nameLabel.BackgroundTransparency = 1
+nameLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+nameLabel.TextSize = 12
+nameLabel.Font = Enum.Font.GothamSemibold
+nameLabel.Text = crate.Name .. " [" .. rarity .. "]"
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.Parent = row
+
+-- Action Button
+local actionBtn = Instance.new("TextButton")
+actionBtn.Size = UDim2.new(0, 90, 1, -10)
+actionBtn.Position = UDim2.new(1, -95, 0, 5)
+actionBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+actionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+actionBtn.TextSize = 11
+actionBtn.Font = Enum.Font.GothamBold
+actionBtn.Text = "TP & Steal"
+actionBtn.Parent = row
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = actionBtn
+
+local btnStroke = Instance.new("UIStroke")
+btnStroke.Color = tagColor
+btnStroke.Thickness = 1
+btnStroke.Parent = actionBtn
+
+-- Blinking Yellow Dot next to TP & Steal Text inside the button
+if item.HasHalo then
+actionBtn.TextXAlignment = Enum.TextXAlignment.Right
+
+local blinkLight = Instance.new("Frame")
+blinkLight.Name = "BlinkLight"
+blinkLight.Size = UDim2.new(0, 8, 0, 8)
+blinkLight.Position = UDim2.new(0, 5, 0.5, -4)
+blinkLight.BackgroundColor3 = Color3.fromRGB(255, 220, 0)
+blinkLight.BorderSizePixel = 0
+blinkLight.Parent = actionBtn
+
+local lightCorner = Instance.new("UICorner")
+lightCorner.CornerRadius = UDim.new(1, 0)
+lightCorner.Parent = blinkLight
+
+local lightStroke = Instance.new("UIStroke")
+lightStroke.Color = Color3.fromRGB(255, 255, 180)
+lightStroke.Thickness = 1
+lightStroke.Parent = blinkLight
+
+-- Smooth pulsing animation
+local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+local blinkTween = TweenService:Create(blinkLight, tweenInfo, {
+BackgroundTransparency = 0.85
+})
+blinkTween:Play()
+end
+
+actionBtn.MouseButton1Click:Connect(function()
+stealCrate(crate, actionBtn)
+end)
+end
+end
+
+-- FPS Tracker Loop
+local frameCount = 0
+local lastTime = tick()
+
+RunService.RenderStepped:Connect(function()
+frameCount = frameCount + 1
+local currentTime = tick()
+
+if currentTime - lastTime >= 1 then
+fpsStatLabel.Text = "⚡ FPS: " .. frameCount
+frameCount = 0
+lastTime = currentTime
+end
+
+-- Player Count
+playerStatLabel.Text = string.format("👤 Players: %d/%d", #Players:GetPlayers(), Players.MaxPlayers)
+
+-- Ping Tracking
+local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+pingStatLabel.Text = "📶 Ping: " .. ping .. " ms"
+
+-- Position & Distance to Safe Zone
+local hrp = character and character:FindFirstChild("HumanoidRootPart")
+if hrp then
+local pos = hrp.Position
+posStatLabel.Text = string.format("📍 Pos: X:%.0f Y:%.0f Z:%.0f", pos.X, pos.Y, pos.Z)
+
+if safeZoneCFrame then
+local dist = math.floor((hrp.Position - safeZoneCFrame.Position).Magnitude)
+safeDistanceLabel.Text = string.format("🛡 Safezone: %dm", dist)
+else
+safeDistanceLabel.Text = "🛡️️ Safezone: Unset"
+end
+else
+posStatLabel.Text = "📍 Pos: N/A"
+safeDistanceLabel.Text = "🛡️ Safezone: Unset"
+end
+end)
+
+refreshCrateList()
+cratesFolder.ChildAdded:Connect(refreshCrateList)
+cratesFolder.ChildRemoved:Connect(refreshCrateList)
+
