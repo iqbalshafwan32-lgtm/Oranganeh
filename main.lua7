@@ -1,0 +1,378 @@
+-- ==========================================
+-- JUMPSCARE SECTION (BAGIAN 1)
+-- ==========================================
+local lp = game:GetService("Players").LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "NeonJumpscare"
+gui.Parent = lp:WaitForChild("PlayerGui")
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 2147483647
+
+local img = Instance.new("ImageLabel")
+img.Parent = gui
+img.Size = UDim2.new(1, 0, 1, 0)
+img.Image = "rbxassetid://121770493074810"
+img.BackgroundTransparency = 0
+img.BackgroundColor3 = Color3.new(0, 0, 0)
+img.ZIndex = 1
+img.Visible = false
+
+local flash = Instance.new("Frame")
+flash.Parent = gui
+flash.Size = UDim2.new(1, 0, 1, 0)
+flash.BackgroundColor3 = Color3.new(1, 1, 1)
+flash.BackgroundTransparency = 1
+flash.ZIndex = 2
+
+local sound = Instance.new("Sound")
+sound.Parent = workspace
+sound.SoundId = "rbxassetid://134262192520482"
+sound.Volume = 10
+
+game:GetService("ContentProvider"):PreloadAsync({img, sound})
+
+task.wait(0.3)
+img.Visible = true
+sound:Play()
+
+local cam = workspace.CurrentCamera
+task.spawn(function()
+    for i = 1, 120 do
+        cam.CFrame = cam.CFrame * CFrame.new(math.random(-5, 5), math.random(-5, 5), 0)
+        
+        local mode = math.random(1, 4)
+        if mode == 1 then
+            flash.BackgroundTransparency = 0.3
+            img.ImageColor3 = Color3.new(15, 15, 15)
+            img.ImageTransparency = 0
+        elseif mode == 2 then
+            flash.BackgroundTransparency = 0.6
+            img.ImageColor3 = Color3.new(5, 5, 5)
+            img.ImageTransparency = 0.2
+        elseif mode == 3 then
+            flash.BackgroundTransparency = 0.8
+            img.ImageColor3 = Color3.new(2, 2, 2)
+            img.ImageTransparency = 0.4
+        else
+            flash.BackgroundTransparency = 1
+            img.ImageColor3 = Color3.new(1, 1, 1)
+            img.ImageTransparency = 0
+        end
+        
+        task.wait(0.01)
+    end
+end)
+
+task.wait(3)
+gui:Destroy()
+sound:Destroy()
+
+-- ==========================================
+-- MAIN HUB SECTION (BAGIAN 2)
+-- ==========================================
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+if playerGui:FindFirstChild("SimpleElegantHub") then
+	playerGui.SimpleElegantHub:Destroy()
+end
+
+local WorldList = {"Arctic", "Beach", "Cloudlands", "Desert", "Forest", "Void", "Volcano"}
+
+for _, worldName in ipairs(WorldList) do
+	pcall(function()
+		player:SetAttribute("GateAccess_" .. worldName, true)
+	end)
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SimpleElegantHub"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 230, 0, 285)
+mainFrame.Position = UDim2.new(0.5, -115, 0.5, -142)
+mainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = mainFrame
+
+-- Efek Garis Pinggir RGB Rainbow
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(255, 255, 255)
+mainStroke.Thickness = 2
+mainStroke.Parent = mainFrame
+
+task.spawn(function()
+	while mainFrame and mainFrame.Parent do
+		for i = 0, 1, 0.005 do
+			if not mainFrame or not mainFrame.Parent then break end
+			mainStroke.Color = Color3.fromHSV(i, 1, 1)
+			task.wait(0.03)
+		end
+	end
+end)
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -65, 0, 35)
+titleLabel.Position = UDim2.new(0, 12, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(240, 240, 255)
+titleLabel.Text = "⚡ +1 POWER 🥚"
+titleLabel.TextSize = 13
+titleLabel.Font = Enum.Font.FredokaOne
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = mainFrame
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 24, 0, 24)
+closeButton.Position = UDim2.new(1, -28, 0, 6)
+closeButton.BackgroundColor3 = Color3.fromRGB(235, 75, 75)
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Text = "❌"
+closeButton.TextSize = 10
+closeButton.Font = Enum.Font.FredokaOne
+closeButton.Parent = mainFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeButton
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 24, 0, 24)
+minimizeButton.Position = UDim2.new(1, -56, 0, 6)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(235, 165, 75)
+minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.Text = "➖"
+minimizeButton.TextSize = 10
+minimizeButton.Font = Enum.Font.FredokaOne
+minimizeButton.Parent = mainFrame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minimizeButton
+
+local container = Instance.new("ScrollingFrame")
+container.Name = "UIContainer"
+container.Size = UDim2.new(1, 0, 1, -40)
+container.Position = UDim2.new(0, 0, 0, 36)
+container.BackgroundTransparency = 1
+container.BorderSizePixel = 0
+container.CanvasSize = UDim2.new(0, 0, 0, 230)
+container.ScrollBarThickness = 3
+container.Parent = mainFrame
+
+local containerLayout = Instance.new("UIListLayout")
+containerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+containerLayout.Padding = UDim.new(0, 6)
+containerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+containerLayout.Parent = container
+
+local function CreateToggleButton(name, layoutOrder)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 206, 0, 32)
+	btn.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+	btn.TextColor3 = Color3.fromRGB(200, 200, 220)
+	btn.Text = name .. " : 🔴 OFF"
+	btn.TextSize = 11
+	btn.Font = Enum.Font.FredokaOne
+	btn.LayoutOrder = layoutOrder
+	btn.Parent = container
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = btn
+	
+	return btn
+end
+
+local function CreateActionButton(name, layoutOrder)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 206, 0, 32)
+	btn.BackgroundColor3 = Color3.fromRGB(55, 55, 85)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Text = name
+	btn.TextSize = 11
+	btn.Font = Enum.Font.FredokaOne
+	btn.LayoutOrder = layoutOrder
+	btn.Parent = container
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = btn
+	
+	return btn
+end
+
+local btnPowerClick = CreateToggleButton("⚡ INSTANT POWER", 1)
+local btnBreakWall = CreateToggleButton("🧱 AUTO BREAK WALL", 2)
+local btnRebirth = CreateToggleButton("🔄 AUTO REBIRTH", 3)
+local btnAntiGuard = CreateToggleButton("🛡️ ANTI HIT", 4)
+local btnTeleportSave = CreateActionButton("🏠 SAFE ZONE", 5)
+
+_G.AutoPowerClick = false
+_G.AutoBreakWall = false
+_G.AutoRebirth = false
+_G.AntiGuard = false
+local isMinimized = false
+
+minimizeButton.MouseButton1Click:Connect(function()
+	isMinimized = not isMinimized
+	if isMinimized then
+		minimizeButton.Text = "➕"
+		container.Visible = false
+		mainFrame.Size = UDim2.new(0, 230, 0, 38)
+	else
+		minimizeButton.Text = "➖"
+		container.Visible = true
+		mainFrame.Size = UDim2.new(0, 230, 0, 285)
+	end
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+	_G.AutoPowerClick = false
+	_G.AutoBreakWall = false
+	_G.AutoRebirth = false
+	_G.AntiGuard = false
+	screenGui:Destroy()
+end)
+
+btnPowerClick.MouseButton1Click:Connect(function()
+	_G.AutoPowerClick = not _G.AutoPowerClick
+	if _G.AutoPowerClick then
+		btnPowerClick.Text = "⚡ INSTANT POWER : 🟢 ON"
+		btnPowerClick.TextColor3 = Color3.fromRGB(100, 255, 150)
+		btnPowerClick.BackgroundColor3 = Color3.fromRGB(35, 65, 45)
+		
+		task.spawn(function()
+			while _G.AutoPowerClick do
+				pcall(function()
+					ReplicatedStorage:WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Activate Dumbell"):FireServer()
+				end)
+				task.wait()
+			end
+		end)
+	else
+		btnPowerClick.Text = "⚡ INSTANT POWER : 🔴 OFF"
+		btnPowerClick.TextColor3 = Color3.fromRGB(200, 200, 220)
+		btnPowerClick.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+	end
+end)
+
+btnBreakWall.MouseButton1Click:Connect(function()
+	_G.AutoBreakWall = not _G.AutoBreakWall
+	if _G.AutoBreakWall then
+		btnBreakWall.Text = "🧱 AUTO BREAK WALL : 🟢 ON"
+		btnBreakWall.TextColor3 = Color3.fromRGB(100, 255, 150)
+		btnBreakWall.BackgroundColor3 = Color3.fromRGB(35, 65, 45)
+		
+		task.spawn(function()
+			while _G.AutoBreakWall do
+				pcall(function()
+					for _, worldName in ipairs(WorldList) do
+						if not _G.AutoBreakWall then break end
+						local args = { worldName }
+						ReplicatedStorage:WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Damage Gate"):FireServer(unpack(args))
+					end
+				end)
+				task.wait()
+			end
+		end)
+	else
+		btnBreakWall.Text = "🧱 AUTO BREAK WALL : 🔴 OFF"
+		btnBreakWall.TextColor3 = Color3.fromRGB(200, 200, 220)
+		btnBreakWall.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+	end
+end)
+
+btnRebirth.MouseButton1Click:Connect(function()
+	_G.AutoRebirth = not _G.AutoRebirth
+	if _G.AutoRebirth then
+		btnRebirth.Text = "🔄 AUTO REBIRTH : 🟢 ON"
+		btnRebirth.TextColor3 = Color3.fromRGB(100, 255, 150)
+		btnRebirth.BackgroundColor3 = Color3.fromRGB(35, 65, 45)
+		
+		task.spawn(function()
+			while _G.AutoRebirth do
+				pcall(function()
+					local notifyObj = player:FindFirstChild("PlayerGui") 
+						and player.PlayerGui:FindFirstChild("Hud") 
+						and player.PlayerGui.Hud:FindFirstChild("Buttons") 
+						and player.PlayerGui.Hud.Buttons:FindFirstChild("Rebirth") 
+						and player.PlayerGui.Hud.Buttons.Rebirth:FindFirstChild("Notify")
+
+					if notifyObj and notifyObj.Visible then
+						ReplicatedStorage:WaitForChild("SharedModules"):WaitForChild("Network"):WaitForChild("Remotes"):WaitForChild("Rebirth"):FireServer()
+						task.wait(2)
+					end
+				end)
+				task.wait(0.5)
+			end
+		end)
+	else
+		btnRebirth.Text = "🔄 AUTO REBIRTH : 🔴 OFF"
+		btnRebirth.TextColor3 = Color3.fromRGB(200, 200, 220)
+		btnRebirth.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+	end
+end)
+
+btnAntiGuard.MouseButton1Click:Connect(function()
+	_G.AntiGuard = not _G.AntiGuard
+	if _G.AntiGuard then
+		btnAntiGuard.Text = "🛡️ ANTI HIT : 🟢 ON"
+		btnAntiGuard.TextColor3 = Color3.fromRGB(100, 255, 150)
+		btnAntiGuard.BackgroundColor3 = Color3.fromRGB(35, 65, 45)
+		
+		task.spawn(function()
+			while _G.AntiGuard do
+				pcall(function()
+					local guardians = player:FindFirstChild("PlayerScripts") 
+						and player.PlayerScripts:FindFirstChild("Scripts") 
+						and player.PlayerScripts.Scripts:FindFirstChild("Game") 
+						and player.PlayerScripts.Scripts.Game:FindFirstChild("Guardians")
+					
+					if guardians then
+						guardians:Destroy()
+					end
+				end)
+				task.wait(1)
+			end
+		end)
+	else
+		btnAntiGuard.Text = "🛡️ ANTI HIT : 🔴 OFF"
+		btnAntiGuard.TextColor3 = Color3.fromRGB(200, 200, 220)
+		btnAntiGuard.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+	end
+end)
+
+btnTeleportSave.MouseButton1Click:Connect(function()
+	pcall(function()
+		local character = player.Character
+		local hrp = character and character:FindFirstChild("HumanoidRootPart")
+		local targetPart = Workspace:FindFirstChild("MAPPARTS") and Workspace.MAPPARTS:FindFirstChild("GroundSign")
+		
+		if hrp and targetPart then
+			if targetPart:IsA("BasePart") then
+				hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+			elseif targetPart:IsA("Model") and targetPart.PrimaryPart then
+				hrp.CFrame = targetPart.PrimaryPart.CFrame + Vector3.new(0, 3, 0)
+			else
+				local foundPart = targetPart:FindFirstChildWhichIsA("BasePart")
+				if foundPart then
+					hrp.CFrame = foundPart.CFrame + Vector3.new(0, 3, 0)
+				end
+			end
+		end
+	end)
+end)
