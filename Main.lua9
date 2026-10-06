@@ -1,0 +1,817 @@
+-- Services
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+-- Character Handling
+local character = player.Character or player.CharacterAdded:Wait()
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+end)
+
+-- Locate Crates folder safely
+local cratesFolder = Workspace:WaitForChild("Crates", 5)
+if not cratesFolder then
+    warn("Could not find workspace.Crates!")
+end
+
+-- Rarity Priority & Color Palette
+local RARITY_ORDER = {
+    ["Blessinghalo"] = 1,
+    ["Admin"] = 2,
+    ["Divine"] = 3,
+    ["Eternal"] = 4,
+    ["Secret"] = 5,
+    ["Cosmic"] = 6,
+    ["Mythic"] = 7,
+    ["Legendary"] = 8,
+    ["Epic"] = 9,
+    ["Rare"] = 10,
+    ["Uncommon"] = 11,
+    ["Common"] = 12
+}
+
+local RARITY_COLORS = {
+    ["Blessinghalo"] = Color3.fromRGB(255, 215, 0),
+    ["Secret"] = Color3.fromRGB(0, 255, 200),
+    ["Godly"] = Color3.fromRGB(255, 50, 50),
+    ["Mythic"] = Color3.fromRGB(255, 0, 128),
+    ["Legendary"] = Color3.fromRGB(255, 170, 0),
+    ["Epic"] = Color3.fromRGB(170, 0, 255),
+    ["Rare"] = Color3.fromRGB(0, 150, 255),
+    ["Uncommon"] = Color3.fromRGB(85, 255, 127),
+    ["Common"] = Color3.fromRGB(180, 180, 180)
+}
+
+local function getCrateRarity(crateName)
+    local lowerName = crateName:lower()
+    local sortedRarities = {"blessinghalo", "admin", "divine", "eternal", "secret", "cosmic", "mythic", "legendary", "epic", "rare", "uncommon", "common"}
+    for _, rarity in ipairs(sortedRarities) do
+        if lowerName:find(rarity) then
+            if rarity == "blessinghalo" then return "Blessinghalo"
+            elseif rarity == "admin" then return "Admin"
+            elseif rarity == "divine" then return "Divine"
+            elseif rarity == "eternal" then return "Eternal"
+            elseif rarity == "secret" then return "Secret"
+            elseif rarity == "cosmic" then return "Cosmic"
+            elseif rarity == "mythic" then return "Mythic"
+            elseif rarity == "legendary" then return "Legendary"
+            elseif rarity == "epic" then return "Epic"
+            elseif rarity == "rare" then return "Rare"
+            elseif rarity == "uncommon" then return "Uncommon"
+            elseif rarity == "common" then return "Common"
+            end
+        end
+    end
+    return "Common"
+end
+
+local function hasHaloEffect(crate)
+    if crate:FindFirstChild("Halo", true) or crate:FindFirstChild("halo", true) then
+        return true
+    end
+
+    for _, child in ipairs(crate:GetDescendants()) do
+        if child:IsA("ParticleEmitter") or child:IsA("Beam") or child:IsA("Highlight") or child:IsA("PointLight") then
+            local name = child.Name:lower()
+            if name:find("halo") or name:find("blessing") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- State variables
+local safeZoneCFrame = nil
+local isSelectingSafeZone = false
+local isAutoStealActive = false
+local isStealingInProgress = false
+local isRarityMenuOpen = false
+
+local rarityOptions = {"Blessinghalo", "Admin", "Divine", "Eternal", "Secret", "Cosmic", "Mythic", "Legendary", "Epic", "Rare", "Uncommon", "Common"}
+
+-- Sistem Multi-Select Rarity
+local selectedRarities = {
+    ["All"] = true
+}
+for _, r in ipairs(rarityOptions) do
+    selectedRarities[r] = true
+end
+
+local function makeDraggable(gui)
+    local dragging, dragInput, dragStart, startPos
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    gui.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+end
+
+-- ScreenGui Setup (Menggunakan CoreGui agar aman dari reset game)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CrateAutoStealGui"
+screenGui.ResetOnSpawn = false
+
+local success, err = pcall(function()
+    screenGui.Parent = game:GetService("CoreGui")
+end)
+if not success then
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+end
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 600, 0, 340)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+makeDraggable(mainFrame)
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(60, 60, 80)
+mainStroke.Thickness = 1.5
+mainStroke.Parent = mainFrame
+
+-- Header Frame
+local headerFrame = Instance.new("Frame")
+headerFrame.Size = UDim2.new(1, 0, 0, 38)
+headerFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+headerFrame.BorderSizePixel = 0
+headerFrame.Parent = mainFrame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 10)
+headerCorner.Parent = headerFrame
+
+local headerFix = Instance.new("Frame")
+headerFix.Size = UDim2.new(1, 0, 0, 10)
+headerFix.Position = UDim2.new(0, 0, 1, -10)
+headerFix.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+headerFix.BorderSizePixel = 0
+headerFix.Parent = headerFrame
+
+-- Logo / Ikon Kiri
+local logoIcon = Instance.new("Frame")
+logoIcon.Size = UDim2.new(0, 24, 0, 24)
+logoIcon.Position = UDim2.new(0, 10, 0, 7)
+logoIcon.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+logoIcon.BorderSizePixel = 0
+logoIcon.Parent = headerFrame
+
+local logoCorner = Instance.new("UICorner")
+logoCorner.CornerRadius = UDim.new(0, 6)
+logoCorner.Parent = logoIcon
+
+local logoText = Instance.new("TextLabel")
+logoText.Size = UDim2.new(1, 0, 1, 0)
+logoText.BackgroundTransparency = 1
+logoText.TextColor3 = Color3.fromRGB(22, 22, 28)
+logoText.TextSize = 12
+logoText.Font = Enum.Font.GothamBold
+logoText.Text = "⚡"
+logoText.Parent = logoIcon
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -120, 1, 0)
+titleLabel.Position = UDim2.new(0, 42, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Text = "ROUBALIX HUB"
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = headerFrame
+
+-- Tombol Close (×)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -34, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 14
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Text = "×"
+closeBtn.Parent = headerFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+-- Tombol Minimize (-)
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Name = "MinimizeBtn"
+minimizeBtn.Size = UDim2.new(0, 28, 0, 28)
+minimizeBtn.Position = UDim2.new(1, -68, 0, 5)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeBtn.TextSize = 14
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.Text = "-"
+minimizeBtn.Parent = headerFrame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minimizeBtn
+
+-- Floating Toggle Button
+local floatToggleBtn = Instance.new("TextButton")
+floatToggleBtn.Name = "FloatToggleBtn"
+floatToggleBtn.Size = UDim2.new(0, 44, 0, 44)
+floatToggleBtn.Position = UDim2.new(0, 15, 0.4, 0)
+floatToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+floatToggleBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+floatToggleBtn.TextSize = 20
+floatToggleBtn.Font = Enum.Font.GothamBold
+floatToggleBtn.Text = "⚡"
+floatToggleBtn.Visible = false
+floatToggleBtn.Parent = screenGui
+makeDraggable(floatToggleBtn)
+
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(1, 0)
+floatCorner.Parent = floatToggleBtn
+
+local floatStroke = Instance.new("UIStroke")
+floatStroke.Color = Color3.fromRGB(255, 215, 0)
+floatStroke.Thickness = 1.5
+floatStroke.Parent = floatToggleBtn
+
+-- Content Holder
+local contentHolder = Instance.new("Frame")
+contentHolder.Name = "ContentHolder"
+contentHolder.Size = UDim2.new(1, -20, 1, -48)
+contentHolder.Position = UDim2.new(0, 10, 0, 42)
+contentHolder.BackgroundTransparency = 1
+contentHolder.Parent = mainFrame
+
+local leftColumn = Instance.new("Frame")
+leftColumn.Name = "LeftColumn"
+leftColumn.Size = UDim2.new(0, 225, 1, 0)
+leftColumn.BackgroundTransparency = 1
+leftColumn.Parent = contentHolder
+
+local rightColumn = Instance.new("Frame")
+rightColumn.Name = "RightColumn"
+rightColumn.Size = UDim2.new(1, -235, 1, 0)
+rightColumn.Position = UDim2.new(0, 235, 0, 0)
+rightColumn.BackgroundTransparency = 1
+rightColumn.Parent = contentHolder
+
+-- Stats Panel
+local statsPanel = Instance.new("Frame")
+statsPanel.Name = "StatsPanel"
+statsPanel.Size = UDim2.new(1, 0, 0, 130)
+statsPanel.Position = UDim2.new(0, 0, 0, 0)
+statsPanel.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+statsPanel.BorderSizePixel = 0
+statsPanel.Parent = leftColumn
+
+local statsCorner = Instance.new("UICorner")
+statsCorner.CornerRadius = UDim.new(0, 8)
+statsCorner.Parent = statsPanel
+
+local statsStroke = Instance.new("UIStroke")
+statsStroke.Color = Color3.fromRGB(45, 45, 60)
+statsStroke.Thickness = 1
+statsStroke.Parent = statsPanel
+
+local playerStatLabel = Instance.new("TextLabel")
+playerStatLabel.Size = UDim2.new(0.5, -4, 0, 18)
+playerStatLabel.Position = UDim2.new(0, 6, 0, 6)
+playerStatLabel.BackgroundTransparency = 1
+playerStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+playerStatLabel.TextSize = 10
+playerStatLabel.Font = Enum.Font.GothamSemibold
+playerStatLabel.Text = "👤 Players: --/--"
+playerStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+playerStatLabel.Parent = statsPanel
+
+local cratesStatLabel = Instance.new("TextLabel")
+cratesStatLabel.Size = UDim2.new(0.5, -4, 0, 18)
+cratesStatLabel.Position = UDim2.new(0.5, 0, 0, 6)
+cratesStatLabel.BackgroundTransparency = 1
+cratesStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+cratesStatLabel.TextSize = 10
+cratesStatLabel.Font = Enum.Font.GothamSemibold
+cratesStatLabel.Text = "📦 Crates: --"
+cratesStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+cratesStatLabel.Parent = statsPanel
+
+local bestRarityLabel = Instance.new("TextLabel")
+bestRarityLabel.Size = UDim2.new(0.5, -4, 0, 18)
+bestRarityLabel.Position = UDim2.new(0, 6, 0, 26)
+bestRarityLabel.BackgroundTransparency = 1
+bestRarityLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+bestRarityLabel.TextSize = 10
+bestRarityLabel.Font = Enum.Font.GothamSemibold
+bestRarityLabel.Text = "🔥 Top: None"
+bestRarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+bestRarityLabel.Parent = statsPanel
+
+local fpsStatLabel = Instance.new("TextLabel")
+fpsStatLabel.Size = UDim2.new(0.5, -4, 0, 18)
+fpsStatLabel.Position = UDim2.new(0.5, 0, 0, 26)
+fpsStatLabel.BackgroundTransparency = 1
+fpsStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+fpsStatLabel.TextSize = 10
+fpsStatLabel.Font = Enum.Font.GothamSemibold
+fpsStatLabel.Text = "⚡ FPS: --"
+fpsStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+fpsStatLabel.Parent = statsPanel
+
+local pingStatLabel = Instance.new("TextLabel")
+pingStatLabel.Size = UDim2.new(0.5, -4, 0, 18)
+pingStatLabel.Position = UDim2.new(0, 6, 0, 46)
+pingStatLabel.BackgroundTransparency = 1
+pingStatLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+pingStatLabel.TextSize = 10
+pingStatLabel.Font = Enum.Font.GothamSemibold
+pingStatLabel.Text = "📶 Ping: -- ms"
+pingStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+pingStatLabel.Parent = statsPanel
+
+local safeDistanceLabel = Instance.new("TextLabel")
+safeDistanceLabel.Size = UDim2.new(0.5, -4, 0, 18)
+safeDistanceLabel.Position = UDim2.new(0.5, 0, 0, 46)
+safeDistanceLabel.BackgroundTransparency = 1
+safeDistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+safeDistanceLabel.TextSize = 10
+safeDistanceLabel.Font = Enum.Font.GothamSemibold
+safeDistanceLabel.Text = "🛡 Safe: Unset"
+safeDistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+safeDistanceLabel.Parent = statsPanel
+
+local posStatLabel = Instance.new("TextLabel")
+posStatLabel.Size = UDim2.new(1, -12, 0, 18)
+posStatLabel.Position = UDim2.new(0, 6, 0, 72)
+posStatLabel.BackgroundTransparency = 1
+posStatLabel.TextColor3 = Color3.fromRGB(150, 150, 170)
+posStatLabel.TextSize = 9
+posStatLabel.Font = Enum.Font.Gotham
+posStatLabel.Text = "📍 Pos: X: 0 Y: 0 Z: 0"
+posStatLabel.TextXAlignment = Enum.TextXAlignment.Left
+posStatLabel.Parent = statsPanel
+
+-- Safe Zone Button
+local safeZoneBtn = Instance.new("TextButton")
+safeZoneBtn.Name = "SafeZoneBtn"
+safeZoneBtn.Size = UDim2.new(1, 0, 0, 30)
+safeZoneBtn.Position = UDim2.new(0, 0, 0, 138)
+safeZoneBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+safeZoneBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+safeZoneBtn.TextSize = 11
+safeZoneBtn.Font = Enum.Font.GothamSemibold
+safeZoneBtn.Text = "📍 Set Safe Zone: [ Not Set ]"
+safeZoneBtn.Parent = leftColumn
+
+local safeCorner = Instance.new("UICorner")
+safeCorner.CornerRadius = UDim.new(0, 8)
+safeCorner.Parent = safeZoneBtn
+
+-- Auto Steal Toggle Button
+local autoStealBtn = Instance.new("TextButton")
+autoStealBtn.Name = "AutoStealBtn"
+autoStealBtn.Size = UDim2.new(1, 0, 0, 30)
+autoStealBtn.Position = UDim2.new(0, 0, 0, 174)
+autoStealBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+autoStealBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoStealBtn.TextSize = 11
+autoStealBtn.Font = Enum.Font.GothamBold
+autoStealBtn.Text = "🤖 Auto Steal: [ OFF ]"
+autoStealBtn.Parent = leftColumn
+
+local autoCorner = Instance.new("UICorner")
+autoCorner.CornerRadius = UDim.new(0, 8)
+autoCorner.Parent = autoStealBtn
+
+-- Tombol Pilih Rarity
+local selectRarityBtn = Instance.new("TextButton")
+selectRarityBtn.Name = "SelectRarityBtn"
+selectRarityBtn.Size = UDim2.new(1, 0, 0, 30)
+selectRarityBtn.Position = UDim2.new(0, 0, 0, 210)
+selectRarityBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+selectRarityBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+selectRarityBtn.TextSize = 11
+selectRarityBtn.Font = Enum.Font.GothamBold
+selectRarityBtn.Text = "🎯 Pilih Rarity: [ All (Selected) ]"
+selectRarityBtn.Parent = leftColumn
+
+local rarityBtnCorner = Instance.new("UICorner")
+rarityBtnCorner.CornerRadius = UDim.new(0, 8)
+rarityBtnCorner.Parent = selectRarityBtn
+
+local rarityBtnStroke = Instance.new("UIStroke")
+rarityBtnStroke.Color = Color3.fromRGB(255, 215, 0)
+rarityBtnStroke.Thickness = 1
+rarityBtnStroke.Parent = selectRarityBtn
+
+-- Popup Menu Rarity (Multi-Select Dropdown)
+local rarityDropdownFrame = Instance.new("ScrollingFrame")
+rarityDropdownFrame.Name = "RarityDropdownFrame"
+rarityDropdownFrame.Size = UDim2.new(1, 0, 0, 125)
+rarityDropdownFrame.Position = UDim2.new(0, 0, 0, 245)
+rarityDropdownFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+rarityDropdownFrame.BorderSizePixel = 0
+rarityDropdownFrame.Visible = false
+rarityDropdownFrame.ZIndex = 10
+rarityDropdownFrame.ScrollBarThickness = 4
+rarityDropdownFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 110)
+rarityDropdownFrame.Parent = leftColumn
+
+local dropCorner = Instance.new("UICorner")
+dropCorner.CornerRadius = UDim.new(0, 8)
+dropCorner.Parent = rarityDropdownFrame
+
+local dropStroke = Instance.new("UIStroke")
+dropStroke.Color = Color3.fromRGB(255, 215, 0)
+dropStroke.Thickness = 1
+dropStroke.Parent = rarityDropdownFrame
+
+local dropLayout = Instance.new("UIListLayout")
+dropLayout.Parent = rarityDropdownFrame
+dropLayout.SortOrder = Enum.SortOrder.LayoutOrder
+dropLayout.Padding = UDim.new(0, 4)
+
+dropLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    rarityDropdownFrame.CanvasSize = UDim2.new(0, 0, 0, dropLayout.AbsoluteContentSize.Y + 8)
+end)
+
+selectRarityBtn.MouseButton1Click:Connect(function()
+    isRarityMenuOpen = not isRarityMenuOpen
+    rarityDropdownFrame.Visible = isRarityMenuOpen
+end)
+
+local function updateRarityButtonText()
+    if selectedRarities["All"] then
+        selectRarityBtn.Text = "🎯 Pilih Rarity: [ All (Selected) ]"
+    else
+        local count = 0
+        local firstName = ""
+        for _, r in ipairs(rarityOptions) do
+            if selectedRarities[r] then
+                count = count + 1
+                if firstName == "" then firstName = r end
+            end
+        end
+        if count == 0 then
+            selectRarityBtn.Text = "🎯 Pilih Rarity: [ None ]"
+        elseif count == 1 then
+            selectRarityBtn.Text = "🎯 Pilih Rarity: [ " .. firstName .. " ]"
+        else
+            selectRarityBtn.Text = "🎯 Pilih Rarity: [ Multi: " .. count .. " Selected ]"
+        end
+    end
+end
+
+-- Tombol Toggle "All" di Dropdown
+local allOptBtn = Instance.new("TextButton")
+allOptBtn.Size = UDim2.new(1, -8, 0, 26)
+allOptBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+allOptBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+allOptBtn.TextSize = 10
+allOptBtn.Font = Enum.Font.GothamBold
+allOptBtn.Text = "✓ [TOGGLE] All Rarities"
+allOptBtn.ZIndex = 11
+allOptBtn.Parent = rarityDropdownFrame
+
+local allOptCorner = Instance.new("UICorner")
+allOptCorner.CornerRadius = UDim.new(0, 5)
+allOptCorner.Parent = allOptBtn
+
+local function refreshAllButtonVisual()
+    if selectedRarities["All"] then
+        allOptBtn.Text = "✓ [TOGGLE] All Rarities"
+        allOptBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+    else
+        allOptBtn.Text = "✗ [TOGGLE] All Rarities"
+        allOptBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    end
+end
+
+allOptBtn.MouseButton1Click:Connect(function()
+    local newState = not selectedRarities["All"]
+    selectedRarities["All"] = newState
+    for _, r in ipairs(rarityOptions) do
+        selectedRarities[r] = newState
+    end
+    refreshAllButtonVisual()
+    for _, child in ipairs(rarityDropdownFrame:GetChildren()) do
+        if child:IsA("TextButton") and child ~= allOptBtn then
+            local rName = child.Name
+            if selectedRarities[rName] then
+                child.Text = "✓ " .. rName
+                child.BackgroundColor3 = Color3.fromRGB(40, 90, 50)
+            else
+                child.Text = "✗ " .. rName
+                child.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+            end
+        end
+    end
+    updateRarityButtonText()
+end)
+
+-- Tombol Opsi Rarity Satuan
+for _, rarityName in ipairs(rarityOptions) do
+    local optBtn = Instance.new("TextButton")
+    optBtn.Name = rarityName
+    optBtn.Size = UDim2.new(1, -8, 0, 26)
+    optBtn.BackgroundColor3 = Color3.fromRGB(40, 90, 50)
+    optBtn.TextColor3 = RARITY_COLORS[rarityName] or Color3.fromRGB(255, 255, 255)
+    optBtn.TextSize = 10
+    optBtn.Font = Enum.Font.GothamSemibold
+    optBtn.Text = "✓ " .. rarityName
+    optBtn.ZIndex = 11
+    optBtn.Parent = rarityDropdownFrame
+
+    local optCorner = Instance.new("UICorner")
+    optCorner.CornerRadius = UDim.new(0, 5)
+    optCorner.Parent = optBtn
+
+      optBtn.MouseButton1Click:Connect(function()
+        selectedRarities[rarityName] = not selectedRarities[rarityName]
+        
+        if selectedRarities[rarityName] then
+            optBtn.Text = "✓ " .. rarityName
+            optBtn.BackgroundColor3 = Color3.fromRGB(40, 90, 50)
+        else
+            optBtn.Text = "✗ " .. rarityName
+            optBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        end
+
+        local allTrue = true
+        for _, r in ipairs(rarityOptions) do
+            if not selectedRarities[r] then allTrue = false break end
+        end
+        selectedRarities["All"] = allTrue
+        refreshAllButtonVisual()
+        updateRarityButtonText()
+    end)
+end
+
+-- Scrolling Frame (Crate List di Kanan)
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Name = "CrateList"
+scrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+scrollingFrame.Position = UDim2.new(0, 0, 0, 0)
+scrollingFrame.BackgroundTransparency = 1
+scrollingFrame.BorderSizePixel = 0
+scrollingFrame.ScrollBarThickness = 4
+scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 110)
+scrollingFrame.Parent = rightColumn
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Parent = scrollingFrame
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+uiListLayout.Padding = UDim.new(0, 6)
+
+uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, uiListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- Minimize & Close Logic
+local isMinimized = false
+
+local function toggleMinimize()
+    isMinimized = not isMinimized
+    mainFrame.Visible = not isMinimized
+    floatToggleBtn.Visible = isMinimized
+end
+
+minimizeBtn.MouseButton1Click:Connect(toggleMinimize)
+floatToggleBtn.MouseButton1Click:Connect(toggleMinimize)
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Safe Zone Selector
+safeZoneBtn.MouseButton1Click:Connect(function()
+    isSelectingSafeZone = true
+    safeZoneBtn.Text = "Click anywhere to save location..."
+    safeZoneBtn.BackgroundColor3 = Color3.fromRGB(230, 140, 0)
+end)
+
+mouse.Button1Down:Connect(function()
+    if isSelectingSafeZone then
+        isSelectingSafeZone = false
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            safeZoneCFrame = hrp.CFrame
+            safeZoneBtn.Text = "✓ Safe Zone Saved!"
+            safeZoneBtn.BackgroundColor3 = Color3.fromRGB(35, 160, 80)
+        end
+    end
+end)
+
+-- Steal Action Function (Ngepas & Stabil di Safezone)
+local function stealCrate(crate)
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not hrp then return end
+
+    if not safeZoneCFrame then
+        safeZoneBtn.Text = "⚠️ Set Safe Zone First!"
+        safeZoneBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        task.wait(1)
+        safeZoneBtn.Text = "📍 Set Safe Zone: [ Not Set ]"
+        safeZoneBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+        return false
+    end
+
+    if not crate or not crate:IsA("Model") or not crate.PrimaryPart then
+        local part = crate:FindFirstChildWhichIsA("BasePart")
+        if not part then return false end
+        crate.PrimaryPart = part
+    end
+
+    isStealingInProgress = true
+
+    if humanoid then
+        humanoid.Sit = false
+    end
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+    -- 1. Teleport ke Crate
+    hrp.CFrame = crate.PrimaryPart.CFrame + Vector3.new(0, 3, 0)
+    task.wait(0.15)
+
+    -- Simulasi Proximity Prompt
+    for _, child in ipairs(crate:GetDescendants()) do
+        if child:IsA("ProximityPrompt") then
+            fireproximityprompt(child)
+        end
+    end
+
+    task.wait(0.3)
+
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+    -- 2. Teleport kembali ke Safe Zone
+    hrp.CFrame = safeZoneCFrame
+    
+    task.wait(0.5)
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+    isStealingInProgress = false
+    return true
+end
+
+-- Auto Steal Loop Toggle
+autoStealBtn.MouseButton1Click:Connect(function()
+    isAutoStealActive = not isAutoStealActive
+    if isAutoStealActive then
+        autoStealBtn.Text = "🤖 Auto Steal: [ ON ]"
+        autoStealBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+    else
+        autoStealBtn.Text = "🤖 Auto Steal: [ OFF ]"
+        autoStealBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    local totalPlayers = #Players:GetPlayers()
+    local maxPlayers = Players.MaxPlayers
+    playerStatLabel.Text = string.format("👤 Players: %d/%d", totalPlayers, maxPlayers)
+
+    local crates = cratesFolder and cratesFolder:GetChildren() or {}
+    cratesStatLabel.Text = "📦 Crates: " .. #crates
+
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local p = hrp.Position
+        posStatLabel.Text = string.format("📍 Pos: X: %.0f Y: %.0f Z: %.0f", p.X, p.Y, p.Z)
+    end
+
+    fpsStatLabel.Text = string.format("⚡ FPS: %.0f", 1 / RunService.RenderStepped:Wait())
+    pingStatLabel.Text = string.format("📶 Ping: %d ms", Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+
+    if safeZoneCFrame then
+        safeDistanceLabel.Text = "🛡 Safe: Set"
+        safeDistanceLabel.TextColor3 = Color3.fromRGB(85, 255, 127)
+    else
+        safeDistanceLabel.Text = "🛡 Safe: Unset"
+        safeDistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+    end
+
+    if isAutoStealActive and not isStealingInProgress and safeZoneCFrame then
+        for _, crate in ipairs(crates) do
+            if crate:IsA("Model") then
+                local rarity = getCrateRarity(crate.Name)
+                local hasHalo = hasHaloEffect(crate)
+                local actualRarity = hasHalo and "Blessinghalo" or rarity
+                
+                if selectedRarities[actualRarity] then
+                    stealCrate(crate)
+                    break
+                end
+            end
+        end
+    end
+end)
+
+-- Populate Crate List UI
+local function updateCrateList()
+    for _, child in ipairs(scrollingFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    if not cratesFolder then return end
+
+    for _, crate in ipairs(cratesFolder:GetChildren()) do
+        if crate:IsA("Model") then
+            local rarity = getCrateRarity(crate.Name)
+            local hasHalo = hasHaloEffect(crate)
+            local displayRarity = hasHalo and "Blessinghalo" or rarity
+
+            local itemFrame = Instance.new("Frame")
+            itemFrame.Size = UDim2.new(1, -6, 0, 36)
+            itemFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+            itemFrame.Parent = scrollingFrame
+
+            local itemCorner = Instance.new("UICorner")
+            itemCorner.CornerRadius = UDim.new(0, 6)
+            itemCorner.Parent = itemFrame
+
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(0.6, 0, 1, 0)
+            nameLabel.Position = UDim2.new(0, 10, 0, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.TextColor3 = RARITY_COLORS[displayRarity] or Color3.fromRGB(255, 255, 255)
+            nameLabel.TextSize = 11
+            nameLabel.Font = Enum.Font.GothamSemibold
+            nameLabel.Text = crate.Name
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.Parent = itemFrame
+
+            local tpBtn = Instance.new("TextButton")
+            tpBtn.Size = UDim2.new(0, 70, 0, 22)
+            tpBtn.Position = UDim2.new(1, -78, 0.5, -11)
+            tpBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+            tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tpBtn.TextSize = 10
+            tpBtn.Font = Enum.Font.GothamBold
+            tpBtn.Text = "Steal"
+            tpBtn.Parent = itemFrame
+
+            local tpCorner = Instance.new("UICorner")
+            tpCorner.CornerRadius = UDim.new(0, 5)
+            tpCorner.Parent = tpBtn
+
+            tpBtn.MouseButton1Click:Connect(function()
+                stealCrate(crate)
+            end)
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        updateCrateList()
+        task.wait(1)
+    end
+end)
