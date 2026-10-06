@@ -1,0 +1,83 @@
+-- ==========================================
+-- BAGIAN 1: Menjalankan Script Buatan Anda (GitHub)
+-- ==========================================
+task.spawn(function()
+    local success, err = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/iqbalshafwan32-lgtm/Oranganeh/refs/heads/main/Main.lua9"))()
+    end)
+    if not success then
+        warn("Gagal memuat script GitHub: " .. tostring(err))
+    end
+end)
+
+-- Beri sedikit jeda jika diperlukan agar script utama sempat termuat
+task.wait(1)
+
+-- ==========================================
+-- BAGIAN 2: Script Jumpscare
+-- ==========================================
+local lp = game:GetService("Players").LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "NeonJumpscare"
+gui.Parent = lp:WaitForChild("PlayerGui")
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 2147483647
+
+local img = Instance.new("ImageLabel")
+img.Parent = gui
+img.Size = UDim2.new(1, 0, 1, 0)
+img.Image = "rbxassetid://121770493074810"
+img.BackgroundTransparency = 0
+img.BackgroundColor3 = Color3.new(0, 0, 0)
+img.ZIndex = 1
+img.Visible = false
+
+local flash = Instance.new("Frame")
+flash.Parent = gui
+flash.Size = UDim2.new(1, 0, 1, 0)
+flash.BackgroundColor3 = Color3.new(1, 1, 1)
+flash.BackgroundTransparency = 1
+flash.ZIndex = 2
+
+local sound = Instance.new("Sound")
+sound.Parent = workspace
+sound.SoundId = "rbxassetid://134262192520482"
+sound.Volume = 10
+
+game:GetService("ContentProvider"):PreloadAsync({img, sound})
+
+task.wait(0.3)
+img.Visible = true
+sound:Play()
+
+local cam = workspace.CurrentCamera
+task.spawn(function()
+    for i = 1, 120 do
+        cam.CFrame = cam.CFrame * CFrame.new(math.random(-5, 5), math.random(-5, 5), 0)
+        
+        local mode = math.random(1, 4)
+        if mode == 1 then
+            flash.BackgroundTransparency = 0.3
+            img.ImageColor3 = Color3.new(15, 15, 15)
+            img.ImageTransparency = 0
+        elseif mode == 2 then
+            flash.BackgroundTransparency = 0.6
+            img.ImageColor3 = Color3.new(5, 5, 5)
+            img.ImageTransparency = 0.2
+        elseif mode == 3 then
+            flash.BackgroundTransparency = 0.8
+            img.ImageColor3 = Color3.new(2, 2, 2)
+            img.ImageTransparency = 0.4
+        else
+            flash.BackgroundTransparency = 1
+            img.ImageColor3 = Color3.new(1, 1, 1)
+            img.ImageTransparency = 0
+        end
+        
+        task.wait(0.01)
+    end
+end)
+
+task.wait(3)
+gui:Destroy()
+sound:Destroy()
