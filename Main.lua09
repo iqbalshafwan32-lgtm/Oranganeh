@@ -1,0 +1,591 @@
+-- Pastikan game sudah sepenuhnya memuat
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Hapus GUI lama jika masih ada
+if PlayerGui:FindFirstChild("RideAFishGUI") then
+    PlayerGui.RideAFishGUI:Destroy()
+end
+if PlayerGui:FindFirstChild("RideAFishToggleLogo") then
+    PlayerGui.RideAFishToggleLogo:Destroy()
+end
+
+-- Konfigurasi Status & Pilihan Egg
+getgenv().AutoLoopFarm = false
+getgenv().AutoCoin = false
+
+getgenv().SelectedEggs = {
+    ["Admin Abuse Seraph Egg"] = false,
+    ["Kraken Glory Egg"] = false,
+    ["Inferno Egg"] = false,
+    ["Mamba Egg"] = false,
+    ["Spikey Egg"] = false,
+    ["Solar Orbit Egg"] = false,
+    ["Azure Crown Egg"] = false,
+    ["Amethyst Spiral Egg"] = false,
+    ["Glacial Spiral Egg"] = false,
+    ["Coral Reef Egg"] = false,
+    ["Eternal Egg"] = false,
+    ["Trench Egg"] = false,
+    ["Sovereign Egg"] = false,
+    ["Celestial Egg"] = false,
+    ["Abyss Egg"] = false,
+    ["Deep Egg"] = false,
+    ["Tidal Egg"] = false,
+    ["Reef Egg"] = false,
+    ["Coral Egg"] = false,
+    ["Common Egg"] = false
+}
+
+local isFarming = false
+
+local function getRootPart()
+    local character = LocalPlayer.Character
+    if character then
+        return character:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
+local function triggerProximityPrompt(prompt)
+    if prompt and prompt:IsA("ProximityPrompt") then
+        pcall(function()
+            local oldHoldDuration = prompt.HoldDuration
+            local oldMaxActivationDistance = prompt.MaxActivationDistance
+            
+            prompt.HoldDuration = 0
+            prompt.MaxActivationDistance = math.huge
+            
+            fireproximityprompt(prompt)
+            
+            task.delay(0.1, function()
+                if prompt and prompt.Parent then
+                    prompt.HoldDuration = oldHoldDuration
+                    prompt.MaxActivationDistance = oldMaxActivationDistance
+                end
+            end)
+        end)
+    end
+end
+
+local function storeEggRemote()
+    pcall(function()
+        local args = { "StoreEgg" }
+        ReplicatedStorage:WaitForChild("EggGame"):WaitForChild("Requests"):FireServer(unpack(args))
+    end)
+end
+
+local function executeFarm()
+    local rootPart = getRootPart()
+    if rootPart then
+        local eggRuntime = Workspace:FindFirstChild("EggRuntime")
+        local wildEggs = eggRuntime and eggRuntime:FindFirstChild("WildEggs")
+        
+        if wildEggs then
+            local foundTarget = false
+            local originalPosition = rootPart.CFrame
+            
+            for eggName, isEnabled in pairs(getgenv().SelectedEggs) do
+                if isEnabled and not foundTarget then
+                    local egg = wildEggs:FindFirstChild(eggName)
+                    if egg then
+                        foundTarget = true
+                        local targetPart = egg:IsA("Model") and egg.PrimaryPart or egg:FindFirstChildWhichIsA("BasePart")
+                        if targetPart then
+                            rootPart.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+                            task.wait(0.4)
+                            
+                            local prompt = egg:FindFirstChildWhichIsA("ProximityPrompt", true)
+                            if prompt then
+                                triggerProximityPrompt(prompt)
+                                task.wait(0.3)
+                            end
+                            
+                            rootPart.CFrame = originalPosition
+                            task.wait(1.0)
+                            
+                            storeEggRemote()
+                            task.wait(0.3)
+                        end
+                    end
+                end
+            end
+            return foundTarget
+        end
+    end
+    return false
+end
+
+local function executeCoinFarm()
+    local rootPart = getRootPart()
+    if rootPart then
+        local activeTokens = Workspace:FindFirstChild("ActiveTokens")
+        if activeTokens then
+            for _, coin in ipairs(activeTokens:GetChildren()) do
+                if not getgenv().AutoCoin then break end
+                local targetPart = coin:IsA("Model") and coin.PrimaryPart or coin:FindFirstChildWhichIsA("BasePart")
+                if targetPart then
+                    rootPart.CFrame = targetPart.CFrame + Vector3.new(0, 2, 0)
+                    task.wait(0.2)
+                end
+            end
+        end
+    end
+end
+
+-- === MEMBUAT LOGO FLOATING DENGAN RGB ===
+local ToggleGui = Instance.new("ScreenGui", PlayerGui)
+ToggleGui.Name = "RideAFishToggleLogo"
+ToggleGui.ResetOnSpawn = false
+
+local LogoBtn = Instance.new("TextButton", ToggleGui)
+LogoBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+LogoBtn.Position = UDim2.new(0, 20, 0.5, -25)
+LogoBtn.Size = UDim2.new(0, 50, 0, 50)
+LogoBtn.Font = Enum.Font.GothamBold
+LogoBtn.Text = "🦈"
+LogoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+LogoBtn.TextSize = 22
+Instance.new("UICorner", LogoBtn).CornerRadius = UDim.new(1, 0)
+
+local LogoStroke = Instance.new("UIStroke", LogoBtn)
+LogoStroke.Thickness = 2.5
+
+local LogoMinBtn = Instance.new("TextButton", ToggleGui)
+LogoMinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
+LogoMinBtn.Position = UDim2.new(0, 54, 0.5, -25)
+LogoMinBtn.Size = UDim2.new(0, 20, 0, 20)
+LogoMinBtn.Font = Enum.Font.GothamBold
+LogoMinBtn.Text = "-"
+LogoMinBtn.TextColor3 = Color3.fromRGB(220, 220, 240)
+LogoMinBtn.TextSize = 11
+Instance.new("UICorner", LogoMinBtn).CornerRadius = UDim.new(1, 0)
+
+local LogoMinStroke = Instance.new("UIStroke", LogoMinBtn)
+LogoMinStroke.Thickness = 1.5
+
+-- === MEMBUAT UI UTAMA DENGAN RGB ===
+local ScreenGui = Instance.new("ScreenGui", PlayerGui)
+ScreenGui.Name = "RideAFishGUI"
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 20)
+MainFrame.Position = UDim2.new(0.5, -280, 0.5, -165)
+MainFrame.Size = UDim2.new(0, 560, 0, 330)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+local UIStrokeMain = Instance.new("UIStroke", MainFrame)
+UIStrokeMain.Thickness = 2
+
+-- Efek RGB Rainbow menggunakan fungsi tick()
+task.spawn(function()
+    while RunService.RenderStepped:Wait() do
+        local hue = tick() % 5 / 5
+        local rgbColor = Color3.fromHSV(hue, 0.8, 1)
+        UIStrokeMain.Color = rgbColor
+        LogoStroke.Color = rgbColor
+        LogoMinStroke.Color = rgbColor
+    end
+end)
+
+LogoBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
+
+local isLogoMinimized = false
+LogoMinBtn.MouseButton1Click:Connect(function()
+    isLogoMinimized = not isLogoMinimized
+    MainFrame.Visible = not isLogoMinimized
+    LogoMinBtn.Text = isLogoMinimized and "+" or "-"
+end)
+
+local Header = Instance.new("Frame", MainFrame)
+Header.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+Header.Size = UDim2.new(1, 0, 0, 38)
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 12)
+
+local HeaderCover = Instance.new("Frame", Header)
+HeaderCover.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+HeaderCover.BorderSizePixel = 0
+HeaderCover.Position = UDim2.new(0, 0, 1, -8)
+HeaderCover.Size = UDim2.new(1, 0, 0, 8)
+
+local TitleLabel = Instance.new("TextLabel", Header)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "🦈 RIDE A FISH - HUB"
+TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 255)
+TitleLabel.TextSize = 13
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local CloseBtn = Instance.new("TextButton", Header)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Position = UDim2.new(1, -32, 0.5, -11)
+CloseBtn.Size = UDim2.new(0, 22, 0, 22)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 14
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+    ToggleGui:Destroy()
+end)
+
+local MinimizeBtn = Instance.new("TextButton", Header)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+MinimizeBtn.Position = UDim2.new(1, -60, 0.5, -11)
+MinimizeBtn.Size = UDim2.new(0, 22, 0, 22)
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(220, 220, 240)
+MinimizeBtn.TextSize = 14
+Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 6)
+
+local isMinimized = false
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    for _, child in ipairs(MainFrame:GetChildren()) do
+        if child ~= Header and child ~= MainFrame:FindFirstChildOfClass("UIStroke") and child ~= MainFrame:FindFirstChildOfClass("UICorner") then
+            child.Visible = not isMinimized
+        end
+    end
+    TweenService:Create(MainFrame, TweenInfo.new(0.2), {Size = isMinimized and UDim2.new(0, 560, 0, 38) or UDim2.new(0, 560, 0, 330)}):Play()
+    MinimizeBtn.Text = isMinimized and "+" or "-"
+    LogoMinBtn.Text = isMinimized and "+" or "-"
+    isLogoMinimized = isMinimized
+end)
+
+-- Sistem Dragging
+local dragging, dragStart, startPos, currentInput
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        currentInput = input
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                currentInput = nil
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input == currentInput then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+local logoDragging, logoStart, logoPos, logoMinPos, logoInput
+local function setupLogoDrag(btn)
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            logoDragging = true
+            logoStart = input.Position
+            logoPos = LogoBtn.Position
+            logoMinPos = LogoMinBtn.Position
+            logoInput = input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    logoDragging = false
+                    logoInput = nil
+                end
+            end)
+        end
+    end)
+end
+setupLogoDrag(LogoBtn)
+setupLogoDrag(LogoMinBtn)
+
+UserInputService.InputChanged:Connect(function(input)
+    if logoDragging and input == logoInput then
+        local delta = input.Position - logoStart
+        LogoBtn.Position = UDim2.new(logoPos.X.Scale, logoPos.X.Offset + delta.X, logoPos.Y.Scale, logoPos.Y.Offset + delta.Y)
+        LogoMinBtn.Position = UDim2.new(logoMinPos.X.Scale, logoMinPos.X.Offset + delta.X, logoMinPos.Y.Scale, logoMinPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Kontainer Kiri
+local LeftContainer = Instance.new("Frame", MainFrame)
+LeftContainer.BackgroundTransparency = 1
+LeftContainer.Position = UDim2.new(0, 12, 0, 48)
+LeftContainer.Size = UDim2.new(0, 258, 0, 270)
+
+local UIListLeft = Instance.new("UIListLayout", LeftContainer)
+UIListLeft.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLeft.Padding = UDim.new(0, 6)
+
+local TraceBox = Instance.new("ScrollingFrame", LeftContainer)
+TraceBox.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+TraceBox.Size = UDim2.new(1, 0, 0, 95)
+TraceBox.CanvasSize = UDim2.new(0, 0, 0, 350)
+TraceBox.ScrollingEnabled = true
+TraceBox.ScrollBarThickness = 3
+TraceBox.ScrollBarImageColor3 = Color3.fromRGB(80, 140, 220)
+TraceBox.LayoutOrder = 1
+Instance.new("UICorner", TraceBox).CornerRadius = UDim.new(0, 8)
+
+local TraceLayout = Instance.new("UIListLayout", TraceBox)
+TraceLayout.Padding = UDim.new(0, 3)
+local TracePadding = Instance.new("UIPadding", TraceBox)
+TracePadding.PaddingLeft = UDim.new(0, 10)
+TracePadding.PaddingTop = UDim.new(0, 8)
+
+local TraceTitle = Instance.new("TextLabel", TraceBox)
+TraceTitle.BackgroundTransparency = 1
+TraceTitle.Size = UDim2.new(1, 0, 0, 18)
+TraceTitle.Font = Enum.Font.GothamBold
+TraceTitle.Text = "ACTIVE EGGS TRACE:"
+TraceTitle.TextColor3 = Color3.fromRGB(130, 140, 170)
+TraceTitle.TextSize = 10
+TraceTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+task.spawn(function()
+    while task.wait(1) do
+        for _, c in ipairs(TraceBox:GetChildren()) do
+            if c:IsA("TextLabel") and c ~= TraceTitle then c:Destroy() end
+        end
+        local wildEggs = Workspace:FindFirstChild("EggRuntime") and Workspace.EggRuntime:FindFirstChild("WildEggs")
+        if wildEggs then
+            local counts = {}
+            for _, egg in ipairs(wildEggs:GetChildren()) do
+                counts[egg.Name] = (counts[egg.Name] or 0) + 1
+            end
+            for name, qty in pairs(counts) do
+                local lbl = Instance.new("TextLabel", TraceBox)
+                lbl.BackgroundTransparency = 1
+                lbl.Size = UDim2.new(1, 0, 0, 18)
+                lbl.Font = Enum.Font.GothamSemibold
+                lbl.Text = "• " .. name .. ": " .. qty .. "x"
+                lbl.TextColor3 = Color3.fromRGB(110, 230, 140)
+                lbl.TextSize = 10
+                lbl.TextXAlignment = Enum.TextXAlignment.Left
+            end
+        end
+    end
+end)
+
+local BtnOnce = Instance.new("TextButton", LeftContainer)
+BtnOnce.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+BtnOnce.Size = UDim2.new(1, 0, 0, 32)
+BtnOnce.Font = Enum.Font.GothamBold
+BtnOnce.Text = "▶ RUN ONCE"
+BtnOnce.TextColor3 = Color3.fromRGB(230, 230, 245)
+BtnOnce.TextSize = 11
+BtnOnce.LayoutOrder = 2
+Instance.new("UICorner", BtnOnce).CornerRadius = UDim.new(0, 8)
+BtnOnce.MouseButton1Click:Connect(function()
+    if isFarming then return end
+    isFarming = true
+    BtnOnce.Text = "RUNNING..."
+    task.spawn(function()
+        executeFarm()
+        task.wait(0.5)
+        BtnOnce.Text = "▶ RUN ONCE"
+        isFarming = false
+    end)
+end)
+
+local BtnLoop = Instance.new("TextButton", LeftContainer)
+BtnLoop.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+BtnLoop.Size = UDim2.new(1, 0, 0, 32)
+BtnLoop.Font = Enum.Font.GothamBold
+BtnLoop.Text = "🔁 AUTO LOOP EGG"
+BtnLoop.TextColor3 = Color3.fromRGB(230, 230, 245)
+BtnLoop.TextSize = 11
+BtnLoop.LayoutOrder = 3
+Instance.new("UICorner", BtnLoop).CornerRadius = UDim.new(0, 8)
+BtnLoop.MouseButton1Click:Connect(function()
+    getgenv().AutoLoopFarm = not getgenv().AutoLoopFarm
+    if getgenv().AutoLoopFarm then
+        BtnLoop.Text = "⏹ STOP LOOP EGG"
+        BtnLoop.BackgroundColor3 = Color3.fromRGB(140, 45, 45)
+        task.spawn(function()
+            while getgenv().AutoLoopFarm do
+                local found = executeFarm()
+                task.wait(found and 1.5 or 2.0)
+            end
+            BtnLoop.Text = "🔁 AUTO LOOP EGG"
+            BtnLoop.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+        end)
+    else
+        BtnLoop.Text = "🔁 AUTO LOOP EGG"
+        BtnLoop.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+    end
+end)
+
+local BtnToken = Instance.new("TextButton", LeftContainer)
+BtnToken.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+BtnToken.Size = UDim2.new(1, 0, 0, 32)
+BtnToken.Font = Enum.Font.GothamBold
+BtnToken.Text = "🪙 FARM TOKEN [OFF]"
+BtnToken.TextColor3 = Color3.fromRGB(230, 230, 245)
+BtnToken.TextSize = 11
+BtnToken.LayoutOrder = 4
+Instance.new("UICorner", BtnToken).CornerRadius = UDim.new(0, 8)
+BtnToken.MouseButton1Click:Connect(function()
+    getgenv().AutoCoin = not getgenv().AutoCoin
+    if getgenv().AutoCoin then
+        BtnToken.Text = "🪙 FARM TOKEN [ON]"
+        BtnToken.BackgroundColor3 = Color3.fromRGB(35, 120, 65)
+        task.spawn(function()
+            while getgenv().AutoCoin do
+                executeCoinFarm()
+                task.wait(1)
+            end
+        end)
+    else
+        BtnToken.Text = "🪙 FARM TOKEN [OFF]"
+        BtnToken.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+    end
+end)
+
+local BtnReset = Instance.new("TextButton", LeftContainer)
+BtnReset.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+BtnReset.Size = UDim2.new(1, 0, 0, 32)
+BtnReset.Font = Enum.Font.GothamBold
+BtnReset.Text = "♻ RESET CHARACTER"
+BtnReset.TextColor3 = Color3.fromRGB(230, 230, 245)
+BtnReset.TextSize = 11
+BtnReset.LayoutOrder = 5
+Instance.new("UICorner", BtnReset).CornerRadius = UDim.new(0, 8)
+BtnReset.MouseButton1Click:Connect(function()
+    pcall(function()
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.Health = 0
+        end
+    end)
+end)
+
+-- Kontainer Kanan
+local RightContainer = Instance.new("ScrollingFrame", MainFrame)
+RightContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+RightContainer.Position = UDim2.new(0, 278, 0, 48)
+RightContainer.Size = UDim2.new(0, 270, 0, 270)
+RightContainer.CanvasSize = UDim2.new(0, 0, 0, 750)
+RightContainer.ScrollingEnabled = true
+RightContainer.ScrollBarThickness = 4
+RightContainer.ScrollBarImageColor3 = Color3.fromRGB(80, 140, 220)
+Instance.new("UICorner", RightContainer).CornerRadius = UDim.new(0, 8)
+
+local UIListRight = Instance.new("UIListLayout", RightContainer)
+UIListRight.SortOrder = Enum.SortOrder.LayoutOrder
+UIListRight.Padding = UDim.new(0, 5)
+
+local RightPadding = Instance.new("UIPadding", RightContainer)
+RightPadding.PaddingTop = UDim.new(0, 8)
+RightPadding.PaddingLeft = UDim.new(0, 8)
+RightPadding.PaddingRight = UDim.new(0, 8)
+
+local ListTitle = Instance.new("TextLabel", RightContainer)
+ListTitle.BackgroundTransparency = 1
+ListTitle.Size = UDim2.new(1, 0, 0, 20)
+ListTitle.Font = Enum.Font.GothamBold
+ListTitle.Text = "SELECT TARGET EGGS:"
+ListTitle.TextColor3 = Color3.fromRGB(130, 140, 170)
+ListTitle.TextSize = 10
+ListTitle.TextXAlignment = Enum.TextXAlignment.Left
+ListTitle.LayoutOrder = 0
+
+local function createEggToggle(eggName, order)
+    local itemBtn = Instance.new("TextButton", RightContainer)
+    itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+    itemBtn.Size = UDim2.new(1, 0, 0, 30)
+    itemBtn.Font = Enum.Font.GothamSemibold
+    itemBtn.Text = "  [  ]  " .. eggName
+    itemBtn.TextColor3 = Color3.fromRGB(190, 190, 210)
+    itemBtn.TextSize = 10
+    itemBtn.TextXAlignment = Enum.TextXAlignment.Left
+    itemBtn.LayoutOrder = order
+    Instance.new("UICorner", itemBtn).CornerRadius = UDim.new(0, 6)
+    
+    itemBtn.MouseButton1Click:Connect(function()
+        getgenv().SelectedEggs[eggName] = not getgenv().SelectedEggs[eggName]
+        if getgenv().SelectedEggs[eggName] then
+            itemBtn.Text = "  [✓]  " .. eggName
+            itemBtn.TextColor3 = Color3.fromRGB(110, 230, 140)
+            itemBtn.BackgroundColor3 = Color3.fromRGB(25, 45, 35)
+        else
+            itemBtn.Text = "  [  ]  " .. eggName
+            itemBtn.TextColor3 = Color3.fromRGB(190, 190, 210)
+            itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+        end
+    end)
+end
+
+local eggList = {
+    "Admin Abuse Seraph Egg",
+    "Kraken Glory Egg",
+    "Inferno Egg",
+    "Mamba Egg",
+    "Spikey Egg",
+    "Solar Orbit Egg",
+    "Azure Crown Egg",
+    "Amethyst Spiral Egg",
+    "Glacial Spiral Egg",
+    "Coral Reef Egg",
+    "Eternal Egg",
+    "Trench Egg",
+    "Sovereign Egg",
+    "Celestial Egg",
+    "Abyss Egg",
+    "Deep Egg",
+    "Tidal Egg",
+    "Reef Egg",
+    "Coral Egg",
+    "Common Egg"
+}
+
+-- Membuat fungsi createEggToggle yang sebelumnya terpotong
+local function createEggToggle(eggName, order)
+    local itemBtn = Instance.new("TextButton", RightContainer)
+    itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+    itemBtn.Size = UDim2.new(1, 0, 0, 30)
+    itemBtn.Font = Enum.Font.GothamSemibold
+    itemBtn.Text = "  [  ]  " .. eggName
+    itemBtn.TextColor3 = Color3.fromRGB(190, 190, 210)
+    itemBtn.TextSize = 10
+    itemBtn.TextXAlignment = Enum.TextXAlignment.Left
+    itemBtn.LayoutOrder = order
+    Instance.new("UICorner", itemBtn).CornerRadius = UDim.new(0, 6)
+    
+    itemBtn.MouseButton1Click:Connect(function()
+        getgenv().SelectedEggs[eggName] = not getgenv().SelectedEggs[eggName]
+        if getgenv().SelectedEggs[eggName] then
+            itemBtn.Text = "  [✓]  " .. eggName
+            itemBtn.TextColor3 = Color3.fromRGB(110, 230, 140)
+            itemBtn.BackgroundColor3 = Color3.fromRGB(25, 45, 35)
+        else
+            itemBtn.Text = "  [  ]  " .. eggName
+            itemBtn.TextColor3 = Color3.fromRGB(190, 190, 210)
+            itemBtn.BackgroundColor3 = Color3.fromRGB(26, 26, 36)
+        end
+    end)
+end
+
+-- Looping untuk membuat tombol egg
+for i, eggName in ipairs(eggList) do
+    createEggToggle(eggName, i)
+end
+
+-- Sesuaikan ukuran CanvasScrolling agar semua egg bisa di-scroll dengan baik
+RightContainer.CanvasSize = UDim2.new(0, 0, 0, (#eggList * 35) + 50)
