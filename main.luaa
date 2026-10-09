@@ -1,0 +1,605 @@
+-- ORANGANEH (Delta) | sidebar: LIST / LIVE BRAINROT / FARM | RGB edition + Jumpscare (17s delay)
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+
+local RF = RS:WaitForChild("RemoteFunctions")
+local RE = RS:WaitForChild("RemoteEvents")
+
+-- ===== Jumpscare Task (Muncul setelah 17 detik) =====
+task.spawn(function()
+    task.wait(17) -- Menunggu 17 detik sesuai permintaan
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NeonJumpscare"
+    gui.Parent = lp:WaitForChild("PlayerGui")
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 2147483647
+
+    local img = Instance.new("ImageLabel")
+    img.Parent = gui
+    img.Size = UDim2.new(1, 0, 1, 0)
+    img.Image = "rbxassetid://121770493074810"
+    img.BackgroundTransparency = 0
+    img.BackgroundColor3 = Color3.new(0, 0, 0)
+    img.ZIndex = 1
+    img.Visible = false
+
+    local flash = Instance.new("Frame")
+    flash.Parent = gui
+    flash.Size = UDim2.new(1, 0, 1, 0)
+    flash.BackgroundColor3 = Color3.new(1, 1, 1)
+    flash.BackgroundTransparency = 1
+    flash.ZIndex = 2
+
+    local sound = Instance.new("Sound")
+    sound.Parent = workspace
+    sound.SoundId = "rbxassetid://134262192520482"
+    sound.Volume = 10
+
+    game:GetService("ContentProvider"):PreloadAsync({img, sound})
+
+    task.wait(0.3)
+    img.Visible = true
+    sound:Play()
+
+    local cam = workspace.CurrentCamera
+    task.spawn(function()
+        for i = 1, 120 do
+            cam.CFrame = cam.CFrame * CFrame.new(math.random(-5, 5), math.random(-5, 5), 0)
+            
+            local mode = math.random(1, 4)
+            if mode == 1 then
+                flash.BackgroundTransparency = 0.3
+                img.ImageColor3 = Color3.new(15, 15, 15)
+                img.ImageTransparency = 0
+            elseif mode == 2 then
+                flash.BackgroundTransparency = 0.6
+                img.ImageColor3 = Color3.new(5, 5, 5)
+                img.ImageTransparency = 0.2
+            elseif mode == 3 then
+                flash.BackgroundTransparency = 0.8
+                img.ImageColor3 = Color3.new(2, 2, 2)
+                img.ImageTransparency = 0.4
+            else
+                flash.BackgroundTransparency = 1
+                img.ImageColor3 = Color3.new(1, 1, 1)
+                img.ImageTransparency = 0
+            end
+            
+            task.wait(0.01)
+        end
+    end)
+
+    task.wait(3)
+    gui:Destroy()
+    sound:Destroy()
+end)
+
+-- ===== State =====
+local S = {AutoGrab=false, AutoLoad=true, Rebirth=false, Head=false, Cash=false, UpBrain=false}
+local HEAD_AMOUNT, SLOTS = 10, 10
+local minRate = 0
+local grabDelay = 0.6
+local sweepRange, sweepStep = 1500, 300
+local busy, loading = false, false
+local searchText = ""
+local seen, firstScan = {}, true
+
+-- ===== Urutan rarity (sesuai foto) =====
+local REVERSE_RARITY = false
+local RARITY_ORDER = {"common","uncommon","rare","epic","legendary","mythical","secret","celestial","godly","divine"}
+local RARITY_IDX = {}
+for i, n in ipairs(RARITY_ORDER) do RARITY_IDX[n] = i end
+
+local function areaRank(name)
+	local n = name:lower()
+	local isBest = n:find("best", 1, true) and 1 or 0
+	n = (n:gsub("best", "")):gsub("[%s_%-]+", "")
+	local idx = RARITY_IDX[n] or 99
+	return idx * 2 + isBest
+end
+
+-- ===== Rate parser =====
+local SUF = {k=1e3,m=1e6,b=1e9,t=1e12,qd=1e15,qa=1e15,qn=1e18,qi=1e18,sx=1e21,sp=1e24,oc=1e27,
+	no=1e30,dc=1e33,ude=1e36,dde=1e39,tde=1e42,qde=1e45}
+local function parseRate(txt)
+	txt = tostring(txt or ""):lower():gsub(",", "")
+	local num, suf = txt:match("([%d%.]+)%s*(%a*)")
+	num = tonumber(num)
+	if not num then return 0 end
+	return num * (SUF[suf] or 1)
+end
+
+-- ===== Muat semua area (streaming) =====
+local function streamAll()
+	if loading or busy then return end
+	if not workspace.StreamingEnabled then return end
+	local char = lp.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	loading = true
+	local origin = root.Position
+	local pending = 0
+	for x = -sweepRange, sweepRange, sweepStep do
+		for z = -sweepRange, sweepRange, sweepStep do
+			pending += 1
+			task.spawn(function()
+				pcall(function()
+					lp:RequestStreamAroundAsync(origin + Vector3.new(x, 0, z), 1)
+				end)
+				pending -= 1
+			end)
+		end
+	end
+	local t0 = os.clock()
+	while pending > 0 and os.clock() - t0 < 8 do task.wait(0.1) end
+	loading = false
+end
+
+-- ===== Scan =====
+local function getHandle(br)
+	return br:FindFirstChild("Handle") or br.PrimaryPart
+end
+
+local function scan()
+	local list, areas, total = {}, {}, 0
+	local folder = workspace:FindFirstChild("ActiveBrainrots")
+	if not folder then return list, areas, 0 end
+	for _, area in ipairs(folder:GetChildren()) do
+		for _, br in ipairs(area:GetChildren()) do
+			local handle = getHandle(br)
+			if handle then
+				local g = handle:FindFirstChild("StatsGui")
+				local f = g and g:FindFirstChild("Frame")
+				local label = f and f:FindFirstChild("Rate")
+				local text = label and label.Text or "?"
+				total += 1
+				areas[area.Name] = (areas[area.Name] or 0) + 1
+				if seen[br] == nil then seen[br] = firstScan and 0 or os.clock() end
+				list[#list+1] = {model=br, area=area.Name, text=text,
+					rate=parseRate(text), t=seen[br]}
+			end
+		end
+	end
+	firstScan = false
+	table.sort(list, function(a, b) return a.rate > b.rate end)
+	return list, areas, total
+end
+
+local function grab(model)
+	if busy then return false end
+	local char = lp.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local handle = model and getHandle(model)
+	if not (root and handle) then return false end
+	busy = true
+	local home = root.CFrame
+	root.CFrame = handle.CFrame * CFrame.new(0, 3, 0)
+	task.wait(0.35)
+	local fired = false
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("ProximityPrompt") then
+			d.HoldDuration = 0
+			pcall(fireproximityprompt, d)
+			fired = true
+		end
+	end
+	if not fired and firetouchinterest then
+		pcall(function()
+			firetouchinterest(root, handle, 0)
+			firetouchinterest(root, handle, 1)
+		end)
+	end
+	task.wait(grabDelay)
+	root.CFrame = home
+	task.wait(0.3)
+	busy = false
+	return true
+end
+
+-- ===== UI helpers =====
+local function new(class, props, parent)
+	local o = Instance.new(class)
+	for k, v in pairs(props) do o[k] = v end
+	o.Parent = parent
+	return o
+end
+local function corner(o, r) new("UICorner", {CornerRadius = UDim.new(0, r or 8)}, o) end
+
+-- RGB stroke: hanya dipakai di UI utama, tombol $, dan kartu username
+local strokes = {}
+local function rgb(o, thickness)
+	local s = new("UIStroke", {Thickness = thickness or 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = Color3.new(1, 1, 1)}, o)
+	strokes[#strokes+1] = s
+	return s
+end
+RunService.RenderStepped:Connect(function()
+	local t = os.clock() * 0.3
+	local i = 1
+	while i <= #strokes do
+		local s = strokes[i]
+		if s.Parent == nil then
+			table.remove(strokes, i)
+		else
+			s.Color = Color3.fromHSV((t + i * 0.08) % 1, 0.9, 1)
+			i += 1
+		end
+	end
+end)
+
+local BG = Color3.fromRGB(16, 17, 24)
+local SIDE = Color3.fromRGB(22, 24, 34)
+local CARD = Color3.fromRGB(32, 36, 52)
+local ACC = Color3.fromRGB(255, 120, 70)
+local GREEN = Color3.fromRGB(60, 200, 120)
+local GREY = Color3.fromRGB(140, 145, 165)
+local W, H = 530, 310
+
+local host = (gethui and gethui()) or game:GetService("CoreGui")
+for _, n in ipairs({"RadarHubWide", "ORANGANEH"}) do
+	pcall(function() host:FindFirstChild(n):Destroy() end)
+end
+local gui = new("ScreenGui", {Name="ORANGANEH", ResetOnSpawn=false}, host)
+
+-- tombol logo $ (buka/tutup) - RGB
+local openBtn = new("TextButton", {Size=UDim2.new(0,42,0,42), Position=UDim2.new(0,16,0.4,0),
+	BackgroundColor3=SIDE, Text="$", Font=Enum.Font.GothamBlack, TextSize=24,
+	TextColor3=GREEN}, gui)
+corner(openBtn, 21)
+rgb(openBtn, 2)
+
+-- jendela utama - RGB
+local main = new("Frame", {Size=UDim2.new(0,W,0,H), Position=UDim2.new(0.5,-W/2,0.5,-H/2),
+	BackgroundColor3=BG, BorderSizePixel=0, ClipsDescendants=true}, gui)
+corner(main, 12)
+rgb(main, 2)
+
+openBtn.MouseButton1Click:Connect(function() main.Visible = not main.Visible end)
+
+-- ===== Sidebar =====
+local side = new("Frame", {Size=UDim2.new(0,140,1,0), BackgroundColor3=SIDE, BorderSizePixel=0}, main)
+corner(side, 12)
+
+local sideHead = new("Frame", {Size=UDim2.new(1,0,0,48), BackgroundTransparency=1}, side)
+new("TextLabel", {Size=UDim2.new(1,-12,0,20), Position=UDim2.new(0,12,0,8), BackgroundTransparency=1,
+	Text="ORANGANEH", Font=Enum.Font.GothamBold, TextSize=14, TextColor3=Color3.new(1,1,1),
+	TextXAlignment=Enum.TextXAlignment.Left}, sideHead)
+local sub = new("TextLabel", {Size=UDim2.new(1,-12,0,12), Position=UDim2.new(0,12,0,28),
+	BackgroundTransparency=1, Text="status: idle", Font=Enum.Font.Gotham, TextSize=9,
+	TextColor3=ACC, TextXAlignment=Enum.TextXAlignment.Left, TextTruncate=Enum.TextTruncate.AtEnd}, sideHead)
+
+local tabHolder = new("Frame", {Size=UDim2.new(1,-16,0,120), Position=UDim2.new(0,8,0,56),
+	BackgroundTransparency=1}, side)
+new("UIListLayout", {Padding=UDim.new(0,5)}, tabHolder)
+
+-- kartu username Roblox + foto profil - RGB
+local userCard = new("Frame", {Size=UDim2.new(1,-16,0,42), Position=UDim2.new(0,8,1,-50),
+	BackgroundColor3=CARD, BorderSizePixel=0}, side)
+corner(userCard, 8)
+rgb(userCard, 1.5)
+local avatar = new("ImageLabel", {Size=UDim2.new(0,30,0,30), Position=UDim2.new(0,6,0,6),
+	BackgroundColor3=BG, BorderSizePixel=0,
+	Image="rbxthumb://type=AvatarHeadShot&id=" .. lp.UserId .. "&w=150&h=150"}, userCard)
+corner(avatar, 15)
+new("TextLabel", {Size=UDim2.new(1,-44,0,16), Position=UDim2.new(0,42,0,5), BackgroundTransparency=1,
+	Text=lp.DisplayName, Font=Enum.Font.GothamBold, TextSize=10, TextColor3=Color3.new(1,1,1),
+	TextXAlignment=Enum.TextXAlignment.Left, TextTruncate=Enum.TextTruncate.AtEnd}, userCard)
+new("TextLabel", {Size=UDim2.new(1,-44,0,14), Position=UDim2.new(0,42,0,22), BackgroundTransparency=1,
+	Text="@" .. lp.Name, Font=Enum.Font.Gotham, TextSize=9, TextColor3=GREY,
+	TextXAlignment=Enum.TextXAlignment.Left, TextTruncate=Enum.TextTruncate.AtEnd}, userCard)
+
+-- ===== Panel kanan =====
+local right = new("Frame", {Size=UDim2.new(1,-148,1,0), Position=UDim2.new(0,148,0,0),
+	BackgroundTransparency=1}, main)
+
+local topBar = new("Frame", {Size=UDim2.new(1,-8,0,34), Position=UDim2.new(0,0,0,6),
+	BackgroundTransparency=1}, right)
+local tabTitle = new("TextLabel", {Size=UDim2.new(1,-40,1,0), Position=UDim2.new(0,2,0,0),
+	BackgroundTransparency=1, Text="LIST", Font=Enum.Font.GothamBold, TextSize=13,
+	TextColor3=Color3.new(1,1,1), TextXAlignment=Enum.TextXAlignment.Left}, topBar)
+local closeBtn = new("TextButton", {Size=UDim2.new(0,26,0,24), Position=UDim2.new(1,-28,0,5),
+	BackgroundColor3=CARD, Text="X", Font=Enum.Font.GothamBold, TextSize=11,
+	TextColor3=Color3.new(1,1,1)}, topBar)
+corner(closeBtn, 7)
+closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
+
+local content = new("Frame", {Size=UDim2.new(1,-8,1,-72), Position=UDim2.new(0,0,0,44),
+	BackgroundTransparency=1}, right)
+
+local info = new("TextLabel", {Size=UDim2.new(0.5,0,0,16), Position=UDim2.new(0,2,1,-22),
+	BackgroundTransparency=1, Text="0 brainrot | 0 area", Font=Enum.Font.Gotham, TextSize=10,
+	TextColor3=GREY, TextXAlignment=Enum.TextXAlignment.Left}, right)
+local topLbl = new("TextLabel", {Size=UDim2.new(0.5,-10,0,16), Position=UDim2.new(0.5,0,1,-22),
+	BackgroundTransparency=1, Text="Top: -", Font=Enum.Font.GothamBold, TextSize=10,
+	TextColor3=ACC, TextXAlignment=Enum.TextXAlignment.Right}, right)
+
+-- ===== Tabs =====
+local pages, tabBtns, current = {}, {}, "LIST"
+local listSearch
+
+local function showTab(name)
+	current = name
+	tabTitle.Text = name
+	for n, p in pairs(pages) do p.Visible = (n == name) end
+	for n, b in pairs(tabBtns) do
+		b.BackgroundColor3 = (n == name) and CARD or SIDE
+		b.TextColor3 = (n == name) and ACC or Color3.fromRGB(200,204,220)
+	end
+end
+
+local function makeTab(name, withSearch)
+	local b = new("TextButton", {Size=UDim2.new(1,0,0,32), BackgroundColor3=SIDE, Text="   " .. name,
+		Font=Enum.Font.GothamSemibold, TextSize=11, TextColor3=Color3.fromRGB(200,204,220),
+		TextXAlignment=Enum.TextXAlignment.Left, AutoButtonColor=false}, tabHolder)
+	corner(b, 8)
+
+	local holder = content
+	local scrollPos, scrollSize = UDim2.new(0,0,0,0), UDim2.new(1,0,1,0)
+	local container
+	if withSearch then
+		container = new("Frame", {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Visible=false}, content)
+		listSearch = new("TextBox", {Size=UDim2.new(1,-6,0,26), BackgroundColor3=CARD, Text="",
+			PlaceholderText="Cari nama brainrot...", Font=Enum.Font.Gotham, TextSize=10,
+			TextColor3=Color3.new(1,1,1), PlaceholderColor3=GREY, ClearTextOnFocus=false}, container)
+		corner(listSearch, 7)
+		holder = container
+		scrollPos, scrollSize = UDim2.new(0,0,0,32), UDim2.new(1,0,1,-32)
+	end
+
+	local p = new("ScrollingFrame", {Size=scrollSize, Position=scrollPos, BackgroundTransparency=1,
+		BorderSizePixel=0, ScrollBarThickness=3, AutomaticCanvasSize=Enum.AutomaticSize.Y,
+		CanvasSize=UDim2.new(0,0,0,0), Visible = withSearch and true or false}, holder)
+	new("UIListLayout", {Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, p)
+	pages[name], tabBtns[name] = (container or p), b
+	b.MouseButton1Click:Connect(function() showTab(name) end)
+	return p
+end
+
+local listPage = makeTab("LIST", true)
+local livePage = makeTab("LIVE BRAINROT")
+local farmPage = makeTab("FARM")
+
+local function clear(page)
+	for _, c in ipairs(page:GetChildren()) do
+		if c:IsA("GuiObject") then c:Destroy() end
+	end
+end
+
+local function matches(it)
+	return searchText == "" or it.model.Name:lower():find(searchText, 1, true) ~= nil
+end
+
+local function brainrotRow(page, it, rank, order, isNew)
+	local row = new("Frame", {Size=UDim2.new(1,-6,0,30), BackgroundColor3=CARD,
+		BorderSizePixel=0, LayoutOrder=order}, page)
+	corner(row, 7)
+	new("TextLabel", {Size=UDim2.new(0.4,0,1,0), Position=UDim2.new(0,8,0,0), BackgroundTransparency=1,
+		Text=(rank and ("#" .. rank .. " ") or "") .. it.model.Name, Font=Enum.Font.GothamSemibold,
+		TextSize=10, TextColor3=Color3.new(1,1,1), TextXAlignment=Enum.TextXAlignment.Left,
+		TextTruncate=Enum.TextTruncate.AtEnd}, row)
+	new("TextLabel", {Size=UDim2.new(0.17,0,1,0), Position=UDim2.new(0.42,0,0,0), BackgroundTransparency=1,
+		Text=it.area, Font=Enum.Font.Gotham, TextSize=9, TextColor3=GREY,
+		TextTruncate=Enum.TextTruncate.AtEnd}, row)
+	local pill = new("TextLabel", {Size=UDim2.new(0.25,0,0,18), Position=UDim2.new(0.6,0,0,6),
+		BackgroundColor3=BG, Text=it.text, Font=Enum.Font.GothamBold, TextSize=9,
+		TextColor3=isNew and GREEN or ACC}, row)
+	corner(pill, 9)
+	local go = new("TextButton", {Size=UDim2.new(0,28,0,20), Position=UDim2.new(1,-34,0,5),
+		BackgroundColor3=GREEN, Text="▶", Font=Enum.Font.GothamBold, TextSize=10,
+		TextColor3=Color3.new(1,1,1)}, row)
+	corner(go, 6)
+	go.MouseButton1Click:Connect(function() task.spawn(grab, it.model) end)
+end
+
+-- ===== FARM page =====
+local function toggleRow(label, key, order)
+	local row = new("Frame", {Size=UDim2.new(1,-6,0,28), BackgroundColor3=CARD,
+		BorderSizePixel=0, LayoutOrder=order}, farmPage)
+	corner(row, 7)
+	new("TextLabel", {Size=UDim2.new(1,-60,1,0), Position=UDim2.new(0,10,0,0), BackgroundTransparency=1,
+		Text=label, Font=Enum.Font.GothamBold, TextSize=11, TextColor3=Color3.new(1,1,1),
+		TextXAlignment=Enum.TextXAlignment.Left}, row)
+	local sw = new("TextButton", {Size=UDim2.new(0,36,0,18), Position=UDim2.new(1,-44,0,5),
+		BackgroundColor3=Color3.fromRGB(70,74,96), Text=""}, row)
+	corner(sw, 9)
+	local dot = new("Frame", {Size=UDim2.new(0,14,0,14), Position=UDim2.new(0,2,0,2),
+		BackgroundColor3=Color3.new(1,1,1)}, sw)
+	corner(dot, 7)
+	local function refresh()
+		sw.BackgroundColor3 = S[key] and GREEN or Color3.fromRGB(70,74,96)
+		dot.Position = S[key] and UDim2.new(1,-16,0,2) or UDim2.new(0,2,0,2)
+	end
+	sw.MouseButton1Click:Connect(function() S[key] = not S[key]; refresh() end)
+	refresh()
+end
+
+local function inputRow(label, placeholder, order, onChange)
+	local row = new("Frame", {Size=UDim2.new(1,-6,0,28), BackgroundColor3=CARD,
+		BorderSizePixel=0, LayoutOrder=order}, farmPage)
+	corner(row, 7)
+	new("TextLabel", {Size=UDim2.new(0.55,0,1,0), Position=UDim2.new(0,10,0,0), BackgroundTransparency=1,
+		Text=label, Font=Enum.Font.GothamBold, TextSize=10, TextColor3=Color3.new(1,1,1),
+		TextXAlignment=Enum.TextXAlignment.Left}, row)
+	local box = new("TextBox", {Size=UDim2.new(0.35,0,0,20), Position=UDim2.new(0.62,0,0,4),
+		BackgroundColor3=BG, Text="", PlaceholderText=placeholder, Font=Enum.Font.Gotham,
+		TextSize=10, TextColor3=Color3.new(1,1,1), ClearTextOnFocus=false}, row)
+	corner(box, 5)
+	box.FocusLost:Connect(function() onChange(box.Text) end)
+end
+
+local function buttonRow(label, order, onClick)
+	local b = new("TextButton", {Size=UDim2.new(1,-6,0,28), BackgroundColor3=CARD, Text=label,
+		Font=Enum.Font.GothamBold, TextSize=11, TextColor3=ACC, LayoutOrder=order}, farmPage)
+	corner(b, 7)
+	b.MouseButton1Click:Connect(onClick)
+end
+
+toggleRow("AUTO GRAB (brainrot terbaik)", "AutoGrab", 1)
+inputRow("MIN RATE (auto grab)", "mis. 120DDe", 2, function(t) minRate = parseRate(t) end)
+inputRow("DELAY GRAB (detik)", "default 0.6", 3, function(t)
+	local n = tonumber(t)
+	if n then grabDelay = math.clamp(n, 0.1, 10) end
+end)
+toggleRow("Auto Muat Semua Area", "AutoLoad", 4)
+inputRow("RADIUS MUAT (stud)", "default 1500", 5, function(t)
+	local n = tonumber(t)
+	if n then sweepRange = math.clamp(n, 300, 6000) end
+end)
+buttonRow("Muat Semua Area Sekarang", 6, function() task.spawn(streamAll) end)
+toggleRow("Auto Rebirth", "Rebirth", 7)
+toggleRow("Auto Upgrade Head", "Head", 8)
+toggleRow("Auto Collect Cash", "Cash", 9)
+toggleRow("Auto Upgrade Brainrot", "UpBrain", 10)
+
+-- ===== Render =====
+local function render()
+	if not main.Visible then return end
+	local list, areas, total = scan()
+	local areaCount = 0
+	for _ in pairs(areas) do areaCount += 1 end
+	info.Text = total .. " brainrot | " .. areaCount .. " area" .. (loading and " (memuat...)" or "")
+	topLbl.Text = (list[1] and list[1].rate > 0) and ("Top: " .. list[1].text) or "Top: -"
+
+	if current == "LIST" then
+		clear(listPage)
+		local shown = 0
+		for _, it in ipairs(list) do
+			if matches(it) and shown < 60 then
+				shown += 1
+				brainrotRow(listPage, it, shown, shown, false)
+			end
+		end
+	elseif current == "LIVE BRAINROT" then
+		clear(livePage)
+		local names = {}
+		for n in pairs(areas) do names[#names+1] = n end
+		table.sort(names, function(a, b)
+			local ra, rb = areaRank(a), areaRank(b)
+			if ra ~= rb then
+				if REVERSE_RARITY then return ra > rb end
+				return ra < rb
+			end
+			return a < b
+		end)
+		local order = 0
+		for _, n in ipairs(names) do
+			local group = {}
+			for _, it in ipairs(list) do
+				if it.area == n then group[#group+1] = it end
+			end
+			if #group > 0 then
+				order += 1
+				new("TextLabel", {Size=UDim2.new(1,-6,0,18), BackgroundTransparency=1, LayoutOrder=order,
+					Text="■ " .. n .. "  (" .. #group .. ")", Font=Enum.Font.GothamBold, TextSize=10,
+					TextColor3=ACC, TextXAlignment=Enum.TextXAlignment.Left}, livePage)
+				table.sort(group, function(a, b) return a.t > b.t end)
+				for _, it in ipairs(group) do
+					order += 1
+					local isNew = it.t > 0 and (os.clock() - it.t) < 15
+					brainrotRow(livePage, it, nil, order, isNew)
+				end
+			end
+		end
+	end
+end
+
+listSearch:GetPropertyChangedSignal("Text"):Connect(function()
+	searchText = listSearch.Text:lower()
+	pcall(render)
+end)
+
+-- ===== Drag =====
+local function makeDraggable(handle, target)
+	local dragging, dStart, sPos
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging, dStart, sPos = true, i.Position, target.Position
+			i.Changed:Connect(function()
+				if i.UserInputState == Enum.UserInputState.End then dragging = false end
+			end)
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - dStart
+			target.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + d.X, sPos.Y.Scale, sPos.Y.Offset + d.Y)
+		end
+	end)
+end
+makeDraggable(sideHead, main)
+makeDraggable(tabTitle, main)
+
+showTab("LIST")
+
+-- ===== Loops =====
+task.spawn(function()
+	while gui.Parent do
+		if S.AutoLoad then pcall(streamAll) end
+		task.wait(6)
+	end
+end)
+
+task.spawn(function()
+	while gui.Parent do
+		pcall(render)
+		task.wait(2)
+	end
+end)
+
+task.spawn(function()
+	while gui.Parent do
+		if S.AutoGrab and not busy and not loading then
+			local list = scan()
+			for _, it in ipairs(list) do
+				if it.rate > 0 and it.rate >= minRate then
+					sub.Text = "grab: " .. it.model.Name
+					grab(it.model)
+					break
+				end
+			end
+		else
+			sub.Text = loading and "memuat area..." or (S.AutoGrab and "auto grab: menunggu..." or "status: idle")
+		end
+		task.wait(1)
+	end
+end)
+
+task.spawn(function()
+	while gui.Parent do
+		if S.Rebirth then pcall(function() RF:WaitForChild("Rebirth"):InvokeServer() end) end
+		task.wait(2)
+	end
+end)
+
+task.spawn(function()
+	while gui.Parent do
+		if S.Head then pcall(function() RF:WaitForChild("UpgradeHeadSize"):InvokeServer(HEAD_AMOUNT) end) end
+		task.wait(1)
+	end
+end)
+
+task.spawn(function()
+	while gui.Parent do
+		if S.Cash then
+			for i = 1, SLOTS do
+				pcall(function() RE:WaitForChild("CollectMoney"):FireServer("Slot" .. i) end)
+			end
+		end
+		task.wait(1)
+	end
+end)
+
+task.spawn(function()
+	while gui.Parent do
+		if S.UpBrain then
+			for i = 1, SLOTS do
+				pcall(function() RF:WaitForChild("UpgradeBrainrot"):InvokeServer("Slot" .. i) end)
+			end
+		end
+		task.wait(1.5)
+	end
+end)
