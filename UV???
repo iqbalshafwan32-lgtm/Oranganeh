@@ -1,0 +1,1330 @@
+local ok,err=pcall(function()
+local P=game:GetService("Players")
+local U=game:GetService("UserInputService")
+local R=game:GetService("RunService")
+local T=game:GetService("TeleportService")
+local H=game:GetService("HttpService")
+local TW=game:GetService("TweenService")
+local ST=game:GetService("Stats")
+local SG=game:GetService("StarterGui")
+local pl=P.LocalPlayer
+local char=pl.Character or pl.CharacterAdded:Wait()
+local W=Color3.fromRGB(255,255,255)
+local G=Color3.fromRGB(80,220,120)
+local Rr=Color3.fromRGB(255,80,80)
+local B=Color3.fromRGB(70,130,255)
+local BG=Color3.fromRGB(10,10,15)
+local D=Color3.fromRGB(18,22,35)
+local BT=Color3.fromRGB(25,32,50)
+local AB=Color3.fromRGB(70,130,255)
+local GY=Color3.fromRGB(150,160,180)
+local ON=Color3.fromRGB(40,80,40)
+local VB=Color3.fromRGB(29,161,242)
+pcall(function()
+if script then pcall(function()script.Name="_"..math.random(100000,999999)end)end
+if setthreadidentity then pcall(function()setthreadidentity(8)end)end
+if setidentity then pcall(function()setidentity(8)end)end
+end)
+function toast(t,c)
+pcall(function()
+c=c or B
+local f=Instance.new("Frame")
+f.Size=UDim2.new(0,260,0,44)
+f.Position=UDim2.new(.5,-130,0,-60)
+f.BackgroundColor3=D
+f.BackgroundTransparency=.1
+f.BorderSizePixel=0
+f.ZIndex=9999
+f.Parent=pl.PlayerGui
+local co=Instance.new("UICorner")co.CornerRadius=UDim.new(0,10)co.Parent=f
+local s=Instance.new("UIStroke")s.Color=c s.Thickness=2 s.Parent=f
+local l=Instance.new("TextLabel")
+l.Size=UDim2.new(1,-20,1,0)
+l.Position=UDim2.new(0,10,0,0)
+l.BackgroundTransparency=1
+l.Text=t
+l.TextColor3=W
+l.TextSize=12
+l.Font=Enum.Font.GothamBold
+l.TextWrapped=true
+l.ZIndex=10000
+l.Parent=f
+TW:Create(f,TweenInfo.new(.35,Enum.EasingStyle.Back),{Position=UDim2.new(.5,-130,0,20)}):Play()
+task.delay(3,function()
+if not f or not f.Parent then return end
+local o=TW:Create(f,TweenInfo.new(.3),{Position=UDim2.new(.5,-130,0,-60)})
+o:Play()
+o.Completed:Connect(function()if f then f:Destroy()end end)
+end)
+end)
+end
+local function cn(o,r)local c=Instance.new("UICorner")c.CornerRadius=UDim.new(0,r or 8)c.Parent=o end
+local function sk(o,c,t)local s=Instance.new("UIStroke")s.Color=c or B s.Thickness=t or 2 s.Parent=o return s end
+local function lb(p,t,sz,f,c,po,s2,al)
+local l=Instance.new("TextLabel")l.BackgroundTransparency=1 l.Text=t l.TextSize=sz
+l.Font=f l.TextColor3=c l.Position=po l.Size=s2
+l.TextXAlignment=al or Enum.TextXAlignment.Center l.TextYAlignment=Enum.TextYAlignment.Center l.Parent=p return l
+end
+local function hm()return char and char:FindFirstChildOfClass("Humanoid")end
+local function hr()return char and char:FindFirstChild("HumanoidRootPart")end
+local old=pl:WaitForChild("PlayerGui"):FindFirstChild("AllMapHubGui")
+if old then old:Destroy()end
+local sg=Instance.new("ScreenGui")
+sg.Name="AllMapHubGui"
+sg.ResetOnSpawn=false
+sg.Parent=pl.PlayerGui
+local ib=Instance.new("Frame")
+ib.Size=UDim2.new(0,340,0,24)
+ib.Position=UDim2.new(.5,-170,0,60)
+ib.BackgroundColor3=Color3.fromRGB(12,15,25)
+ib.BackgroundTransparency=.15
+ib.BorderSizePixel=0
+ib.ZIndex=5000
+ib.Parent=sg
+cn(ib,12)
+sk(ib,AB,1.5)
+local il=Instance.new("TextLabel")
+il.Size=UDim2.new(1,-16,1,0)
+il.Position=UDim2.new(0,8,0,0)
+il.BackgroundTransparency=1
+il.Text="📊 Tap info panel"
+il.TextColor3=GY
+il.TextSize=11
+il.Font=Enum.Font.GothamBold
+il.ZIndex=5001
+il.Parent=ib
+local ibt=Instance.new("TextButton")
+ibt.Size=UDim2.new(1,0,1,0)
+ibt.BackgroundTransparency=1
+ibt.Text=""
+ibt.ZIndex=5002
+ibt.Parent=ib
+local iOn=false
+local fC=0
+local fT=0
+local cF=0
+local pV=0
+local iC
+R.RenderStepped:Connect(function(dt)fC=fC+1 fT=fT+dt if fT>=1 then cF=fC fC=0 fT=0 end end)
+R.Heartbeat:Connect(function()
+pcall(function()
+local s=ST.Network.ServerStatsItem
+if s and s["Data Ping"]then pV=math.floor(s["Data Ping"]:GetValue())end
+end)
+end)
+ibt.MouseButton1Click:Connect(function()
+iOn=not iOn
+toast(iOn and"📊 Info ON"or"📊 OFF",iOn and G or Rr)
+if iOn then
+pcall(function()settings().Rendering.QualityLevel=Enum.QualityLevel.Level01 end)
+if iC then iC:Disconnect()end
+iC=R.RenderStepped:Connect(function()
+if not iOn then return end
+local m=0
+pcall(function()m=math.floor(ST:GetTotalMemoryUsageMb())end)
+il.Text=string.format("📊 FPS:%d|📶%dms|👥%d|💾%dMB",cF,pV,#P:GetPlayers(),m)
+il.TextColor3=G
+end)
+else
+if iC then iC:Disconnect()iC=nil end
+pcall(function()settings().Rendering.QualityLevel=Enum.QualityLevel.Automatic end)
+il.Text="📊 Tap info panel"
+il.TextColor3=GY
+end
+end)
+local mf=Instance.new("Frame")
+mf.AnchorPoint=Vector2.new(.5,.5)
+mf.Position=UDim2.new(.5,0,.5,0)
+mf.Size=UDim2.new(0,265,0,375)
+mf.BackgroundColor3=BG
+mf.BorderSizePixel=0
+mf.Active=true
+mf.Parent=sg
+cn(mf,14)
+sk(mf,B,2)
+local bgi=Instance.new("ImageLabel")
+bgi.Size=UDim2.new(1,0,1,0)
+bgi.BackgroundTransparency=1
+bgi.Image="rbxassetid://134262192520482"
+bgi.ScaleType=Enum.ScaleType.Crop
+bgi.ZIndex=0
+bgi.Parent=mf
+cn(bgi,12)
+local tb=Instance.new("Frame")
+tb.Size=UDim2.new(1,0,0,50)
+tb.BackgroundColor3=BG
+tb.BorderSizePixel=0
+tb.Parent=mf
+cn(tb,14)
+lb(tb,"🌐 UNIVERSAL",14,Enum.Font.GothamBlack,W,UDim2.new(0,10,0,8),UDim2.new(1,-80,0,20),Enum.TextXAlignment.Left)
+lb(tb,"🟢 ONLINE",9,Enum.Font.GothamBold,G,UDim2.new(0,10,0,28),UDim2.new(1,-80,0,12),Enum.TextXAlignment.Left)
+local mb=Instance.new("TextButton")
+mb.Size=UDim2.new(0,26,0,26)
+mb.Position=UDim2.new(1,-60,0,10)
+mb.BackgroundColor3=BT
+mb.Text="−"
+mb.TextSize=14
+mb.Font=Enum.Font.GothamBold
+mb.TextColor3=W
+mb.AutoButtonColor=false
+mb.Parent=tb
+cn(mb,6)
+mb.MouseButton1Click:Connect(function()mf.Visible=false end)
+local cFns={}
+local cb=Instance.new("TextButton")
+cb.Size=UDim2.new(0,26,0,26)
+cb.Position=UDim2.new(1,-30,0,10)
+cb.BackgroundColor3=Color3.fromRGB(80,30,40)
+cb.Text="X"
+cb.TextSize=12
+cb.Font=Enum.Font.GothamBold
+cb.TextColor3=Rr
+cb.AutoButtonColor=false
+cb.Parent=tb
+cn(cb,6)
+cb.MouseButton1Click:Connect(function()
+for _,f in ipairs(cFns)do pcall(f)end
+sg:Destroy()
+end)
+local tc=Instance.new("Frame")
+tc.Size=UDim2.new(1,-16,0,28)
+tc.Position=UDim2.new(0,8,0,54)
+tc.BackgroundColor3=D
+tc.BorderSizePixel=0
+tc.Parent=mf
+cn(tc,8)
+local tl=Instance.new("UIListLayout")
+tl.FillDirection=Enum.FillDirection.Horizontal
+tl.Padding=UDim.new(0,3)
+tl.Parent=tc
+local pg={}
+local tB={}
+local function mkP(n)
+local p=Instance.new("ScrollingFrame")
+p.Size=UDim2.new(1,-16,1,-140)
+p.Position=UDim2.new(0,8,0,88)
+p.BackgroundTransparency=1
+p.BorderSizePixel=0
+p.ScrollBarThickness=3
+p.ScrollBarImageColor3=AB
+p.CanvasSize=UDim2.new(0,0,0,0)
+p.AutomaticCanvasSize=Enum.AutomaticSize.Y
+p.Visible=false
+p.Parent=mf
+local pad=Instance.new("UIPadding")pad.PaddingBottom=UDim.new(0,8)pad.Parent=p
+local l=Instance.new("UIListLayout")l.Padding=UDim.new(0,6)l.SortOrder=Enum.SortOrder.LayoutOrder l.Parent=p
+pg[n]=p
+return p
+end
+local fP=mkP("FARM")
+local sP=mkP("SERVER")
+local pP=mkP("PLAYER")
+local tP=mkP("TELEPORT")
+local function mkTB(n,i,t)
+local b=Instance.new("TextButton")
+b.Size=UDim2.new(.25,-3,1,0)
+b.BackgroundColor3=BT
+b.Text=i.." "..t
+b.TextSize=9
+b.Font=Enum.Font.GothamBold
+b.TextColor3=GY
+b.AutoButtonColor=false
+b.Parent=tc
+cn(b,6)
+b.TextScaled=true
+local l=Instance.new("UITextSizeConstraint")l.MaxTextSize=9 l.Parent=b
+tB[n]=b
+b.MouseButton1Click:Connect(function()
+for k,v in pairs(tB)do
+if k==n then v.BackgroundColor3=AB v.TextColor3=W pg[k].Visible=true
+else v.BackgroundColor3=BT v.TextColor3=GY pg[k].Visible=false end
+end
+end)
+end
+mkTB("FARM","🌾","FARM")
+mkTB("SERVER","🖥️","SERVER")
+mkTB("PLAYER","👤","PLAYER")
+mkTB("TELEPORT","📍","TELEPORT")
+tB["FARM"].BackgroundColor3=AB
+tB["FARM"].TextColor3=W
+pg["FARM"].Visible=true
+local function mkB(p,t,o)
+local b=Instance.new("TextButton")
+b.LayoutOrder=o
+b.Size=UDim2.new(1,0,0,30)
+b.BackgroundColor3=BT
+b.Text=t
+b.TextSize=11
+b.Font=Enum.Font.GothamBold
+b.TextColor3=W
+b.AutoButtonColor=false
+b.Parent=p
+cn(b,8)
+return b
+end
+local function mkFB(t,o)return mkB(fP,t,o)end
+lb(fP,"FARM / MOVEMENT",11,Enum.Font.GothamBold,AB,UDim2.new(0,0,0,0),UDim2.new(1,0,0,18),Enum.TextXAlignment.Left).LayoutOrder=0
+local sf=Instance.new("Frame")
+sf.LayoutOrder=1
+sf.Size=UDim2.new(1,0,0,52)
+sf.BackgroundColor3=D
+sf.BorderSizePixel=0
+sf.Parent=fP
+cn(sf,8)
+lb(sf,"🏃 SPEED",11,Enum.Font.GothamBold,W,UDim2.new(0,8,0,4),UDim2.new(1,-16,0,18),Enum.TextXAlignment.Left)
+local si=Instance.new("TextBox")
+si.Size=UDim2.new(1,-16,0,24)
+si.Position=UDim2.new(0,8,0,22)
+si.BackgroundColor3=BT
+si.Text="100"
+si.TextSize=12
+si.Font=Enum.Font.GothamBold
+si.TextColor3=W
+si.ClearTextOnFocus=false
+si.Parent=sf
+cn(si,6)
+local sBtn=mkFB("🏃 SPEED • OFF",2)
+local sOn=false
+local sV=100
+local function aS()local h=hm()if h then h.WalkSpeed=sOn and sV or 16 end end
+si.FocusLost:Connect(function()
+local v=tonumber(si.Text)
+if v and v>0 then sV=v if sOn then aS()end else si.Text=tostring(sV)end
+end)
+sBtn.MouseButton1Click:Connect(function()
+sOn=not sOn
+sBtn.Text=sOn and"🏃 SPEED • ON"or"🏃 SPEED • OFF"
+sBtn.BackgroundColor3=sOn and ON or BT
+aS()
+toast(sOn and("🏃 Speed "..sV)or"🏃 OFF",sOn and G or Rr)
+end)
+local ff=Instance.new("Frame")
+ff.LayoutOrder=3
+ff.Size=UDim2.new(1,0,0,52)
+ff.BackgroundColor3=D
+ff.BorderSizePixel=0
+ff.Parent=fP
+cn(ff,8)
+lb(ff,"✈️ FLY SPEED",11,Enum.Font.GothamBold,W,UDim2.new(0,8,0,4),UDim2.new(1,-16,0,18),Enum.TextXAlignment.Left)
+local fi=Instance.new("TextBox")
+fi.Size=UDim2.new(1,-16,0,24)
+fi.Position=UDim2.new(0,8,0,22)
+fi.BackgroundColor3=BT
+fi.Text="70"
+fi.TextSize=12
+fi.Font=Enum.Font.GothamBold
+fi.TextColor3=W
+fi.ClearTextOnFocus=false
+fi.Parent=ff
+cn(fi,6)
+local fBtn=mkFB("✈️ FLY • OFF",4)
+local fOn=false
+local fBV,fBG,fC2
+local fUp,fDn=false,false
+local fc=Instance.new("Frame")
+fc.Size=UDim2.new(0,40,0,86)
+fc.Position=UDim2.new(1,-50,.5,-43)
+fc.BackgroundTransparency=1
+fc.Visible=false
+fc.Parent=sg
+cn(fc,10)
+local function mkA(t,y)
+local b=Instance.new("TextButton")
+b.Size=UDim2.new(1,0,0,40)
+b.Position=UDim2.new(0,0,0,y)
+b.BackgroundColor3=Color3.fromRGB(0,0,0)
+b.BackgroundTransparency=.88
+b.Text=t
+b.TextSize=20
+b.TextTransparency=.35
+b.Font=Enum.Font.GothamBold
+b.TextColor3=W
+b.AutoButtonColor=false
+b.Parent=fc
+cn(b,8)
+return b
+end
+local fUB=mkA("↑",0)
+local fDB=mkA("↓",46)
+local function bh(b,s)
+b.MouseButton1Down:Connect(function()s(true)end)
+b.MouseButton1Up:Connect(function()s(false)end)
+b.MouseLeave:Connect(function()s(false)end)
+end
+bh(fUB,function(v)fUp=v end)
+bh(fDB,function(v)fDn=v end)
+local function sF()
+fOn=false
+fUp,fDn=false,false
+if fC2 then fC2:Disconnect()fC2=nil end
+if fBV then fBV:Destroy()fBV=nil end
+if fBG then fBG:Destroy()fBG=nil end
+local h=hm()
+if h then h.PlatformStand=false h:ChangeState(Enum.HumanoidStateType.GettingUp)end
+fc.Visible=false
+fBtn.Text="✈️ FLY • OFF"
+fBtn.BackgroundColor3=BT
+end
+local function stF()
+local r,h=hr(),hm()
+if not r or not h then return end
+fOn=true
+fc.Visible=true
+fBtn.Text="✈️ FLY • ON"
+fBtn.BackgroundColor3=ON
+fBV=Instance.new("BodyVelocity")
+fBV.MaxForce=Vector3.new(1e9,1e9,1e9)
+fBV.Velocity=Vector3.zero
+fBV.Parent=r
+fBG=Instance.new("BodyGyro")
+fBG.MaxTorque=Vector3.new(1e9,1e9,1e9)
+fBG.P=9000
+fBG.CFrame=r.CFrame
+fBG.Parent=r
+h.PlatformStand=true
+fC2=R.RenderStepped:Connect(function()
+local ro,hu=hr(),hm()
+if not ro or not hu or not fBV or not fBG then sF()return end
+local c=workspace.CurrentCamera
+local sp=tonumber(fi.Text)or 70
+local lk=c.CFrame.LookVector
+local d=hu.MoveDirection
+local v=d*sp
+if d.Magnitude>0 then
+local fl=Vector3.new(lk.X,0,lk.Z)
+if fl.Magnitude>0 then local fw=d:Dot(fl.Unit)v=v+Vector3.new(0,lk.Y*fw*sp,0)end
+end
+if fUp or U:IsKeyDown(Enum.KeyCode.Space)then v=v+Vector3.new(0,sp,0)end
+if fDn or U:IsKeyDown(Enum.KeyCode.LeftShift)then v=v-Vector3.new(0,sp,0)end
+fBV.Velocity=v
+local fk=Vector3.new(lk.X,0,lk.Z)
+if fk.Magnitude>0 then fBG.CFrame=CFrame.lookAt(ro.Position,ro.Position+fk)end
+end)
+end
+fBtn.MouseButton1Click:Connect(function()
+if fOn then sF()toast("✈️ Fly OFF",Rr)else stF()toast("✈️ Fly ON",G)end
+end)
+table.insert(cFns,function()if fOn then sF()end end)
+local ncb=mkFB("🚫 NOCLIP • OFF",5)
+local ncOn=false
+local ncC
+ncb.MouseButton1Click:Connect(function()
+ncOn=not ncOn
+ncb.Text=ncOn and"🚫 NOCLIP • ON"or"🚫 NOCLIP • OFF"
+ncb.BackgroundColor3=ncOn and ON or BT
+toast(ncOn and"🚫 Noclip ON"or"🚫 OFF",ncOn and G or Rr)
+if ncOn then
+ncC=R.Stepped:Connect(function()
+if char then for _,p in ipairs(char:GetDescendants())do
+if p:IsA("BasePart")then p.CanCollide=false end
+end end
+end)
+else
+if ncC then ncC:Disconnect()ncC=nil end
+end
+end)
+local ij=mkFB("🦘 INF JUMP • OFF",6)
+local ijOn=false
+ij.MouseButton1Click:Connect(function()
+ijOn=not ijOn
+ij.Text=ijOn and"🦘 INF JUMP • ON"or"🦘 INF JUMP • OFF"
+ij.BackgroundColor3=ijOn and ON or BT
+toast(ijOn and"🦘 Jump ON"or"🦘 OFF",ijOn and G or Rr)
+end)
+U.JumpRequest:Connect(function()
+if ijOn and not fOn then
+local h=hm()
+if h then h:ChangeState(Enum.HumanoidStateType.Jumping)end
+end
+end)
+local eb=mkFB("👁️ ESP • OFF",7)
+local eOn=false
+local eH={}
+local function rE(p)if eH[p]then eH[p]:Destroy()eH[p]=nil end end
+local function aE(p)
+if p==pl or not p.Character then return end
+rE(p)
+local h=Instance.new("Highlight")
+h.FillColor=Color3.fromRGB(255,0,0)
+h.OutlineColor=W
+h.FillTransparency=.7
+h.Parent=p.Character
+eH[p]=h
+end
+eb.MouseButton1Click:Connect(function()
+eOn=not eOn
+eb.Text=eOn and"👁️ ESP • ON"or"👁️ ESP • OFF"
+eb.BackgroundColor3=eOn and ON or BT
+toast(eOn and"👁️ ESP ON"or"👁️ OFF",eOn and G or Rr)
+if eOn then for _,p in ipairs(P:GetPlayers())do aE(p)end
+else for p in pairs(eH)do rE(p)end end
+end)
+local gb=mkFB("🛡️ GODMODE • OFF",8)
+local gOn=false
+local gC
+local function hG()
+if gC then gC:Disconnect()gC=nil end
+local h=hm()
+if not h or not gOn then return end
+h.Health=h.MaxHealth
+gC=h.HealthChanged:Connect(function(hp)
+if gOn and hp>0 and hp<h.MaxHealth then h.Health=h.MaxHealth end
+end)
+end
+gb.MouseButton1Click:Connect(function()
+gOn=not gOn
+gb.Text=gOn and"🛡️ GOD • ON"or"🛡️ GODMODE • OFF"
+gb.BackgroundColor3=gOn and ON or BT
+hG()
+toast(gOn and"🛡️ God ON"or"🛡️ OFF",gOn and G or Rr)
+end)
+local vb=mkFB("👻 INVISIBLE • OFF",9)
+local vOn=false
+local vO={}
+local vC
+local function sV(o)
+if(o:IsA("BasePart")and o.Name~="HumanoidRootPart")or o:IsA("Decal")then
+if vO[o]==nil then vO[o]=o.Transparency end
+o.Transparency=1
+end
+end
+local function aV()
+if vC then vC:Disconnect()vC=nil end
+for o,t in pairs(vO)do if o and o.Parent then o.Transparency=t end end
+vO={}
+if not vOn or not char then return end
+for _,d in ipairs(char:GetDescendants())do sV(d)end
+vC=char.DescendantAdded:Connect(function(d)if vOn then sV(d)end end)
+end
+vb.MouseButton1Click:Connect(function()
+vOn=not vOn
+vb.Text=vOn and"👻 INVIS • ON"or"👻 INVISIBLE • OFF"
+vb.BackgroundColor3=vOn and ON or BT
+aV()
+toast(vOn and"👻 Invis ON"or"👻 OFF",vOn and G or Rr)
+end)
+local wb=mkFB("🌊 WALK ON AIR • OFF",10)
+local wOn=false
+local wC
+wb.MouseButton1Click:Connect(function()
+wOn=not wOn
+wb.Text=wOn and"🌊 WALK AIR • ON"or"🌊 WALK ON AIR • OFF"
+wb.BackgroundColor3=wOn and ON or BT
+toast(wOn and"🌊 Walk Air ON"or"🌊 OFF",wOn and G or Rr)
+if wOn then
+wC=R.Heartbeat:Connect(function()
+local r=hr()
+if r then local v=r.AssemblyLinearVelocity
+if v.Y<-1 then r.AssemblyLinearVelocity=Vector3.new(v.X,0,v.Z)end
+end
+end)
+else
+if wC then wC:Disconnect()wC=nil end
+end
+end)
+lb(sP,"🖥️ SERVER TOOLS",11,Enum.Font.GothamBold,AB,UDim2.new(0,0,0,0),UDim2.new(1,0,0,18),Enum.TextXAlignment.Left).LayoutOrder=0
+local prB=mkB(sP,"🛡️ PROTECTION • OFF",1)
+local prOn=false
+local afkC
+local kickH
+prB.MouseButton1Click:Connect(function()
+prOn=not prOn
+prB.Text=prOn and"🛡️ PROTECTION • ON"or"🛡️ PROTECTION • OFF"
+prB.BackgroundColor3=prOn and ON or BT
+toast(prOn and"🛡️ Protection ON"or"🛡️ OFF",prOn and G or Rr)
+if prOn then
+for _,v in ipairs(workspace:GetDescendants())do
+if v:IsA("ParticleEmitter")or v:IsA("Trail")or v:IsA("Smoke")or v:IsA("Fire")or v:IsA("Sparkles")then v.Enabled=false end
+end
+pcall(function()settings().Rendering.QualityLevel=Enum.QualityLevel.Level01 end)
+if afkC then afkC:Disconnect()end
+afkC=pl.Idled:Connect(function()
+if prOn then
+local o,vu=pcall(function()return game:GetService("VirtualUser")end)
+if o and vu then vu:CaptureController()vu:ClickButton2(Vector2.new())end
+end
+end)
+if not kickH and hookfunction then
+pcall(function()kickH=hookfunction(pl.Kick,function()end)end)
+end
+else
+if afkC then afkC:Disconnect()afkC=nil end
+if kickH and restorefunction then pcall(function()restorefunction(kickH)end)kickH=nil end
+end
+end)
+table.insert(cFns,function()if afkC then afkC:Disconnect()end end)
+local fcB=mkB(sP,"🎥 FREE CAM • OFF",2)
+local fcOn=false
+local fcP
+local fcC
+local fcS={}
+fcB.MouseButton1Click:Connect(function()
+fcOn=not fcOn
+fcB.Text=fcOn and"🎥 FREE CAM • ON"or"🎥 FREE CAM • OFF"
+fcB.BackgroundColor3=fcOn and ON or BT
+toast(fcOn and"🎥 Free Cam ON (WASD/QE)"or"🎥 OFF",fcOn and G or Rr)
+local c=workspace.CurrentCamera
+if fcOn then
+if char then
+local r=char:FindFirstChild("HumanoidRootPart")
+if r then fcS.anc=r.Anchored r.Anchored=true end
+end
+fcP=Instance.new("Part")
+fcP.Transparency=1
+fcP.Anchored=true
+fcP.CanCollide=false
+fcP.Size=Vector3.new(1,1,1)
+fcP.CFrame=c.CFrame
+fcP.Parent=workspace
+fcS.minZ=pl.CameraMinZoomDistance
+fcS.maxZ=pl.CameraMaxZoomDistance
+pl.CameraMinZoomDistance=.5
+pl.CameraMaxZoomDistance=.5
+c.CameraSubject=fcP
+fcC=R.RenderStepped:Connect(function(dt)
+if not fcOn or not fcP then return end
+if c.CameraSubject~=fcP then c.CameraSubject=fcP end
+local sp=60
+local m=Vector3.zero
+if U:IsKeyDown(Enum.KeyCode.W)then m=m+Vector3.new(0,0,-1)end
+if U:IsKeyDown(Enum.KeyCode.S)then m=m+Vector3.new(0,0,1)end
+if U:IsKeyDown(Enum.KeyCode.A)then m=m+Vector3.new(-1,0,0)end
+if U:IsKeyDown(Enum.KeyCode.D)then m=m+Vector3.new(1,0,0)end
+if U:IsKeyDown(Enum.KeyCode.E)then m=m+Vector3.new(0,1,0)end
+if U:IsKeyDown(Enum.KeyCode.Q)then m=m+Vector3.new(0,-1,0)end
+if m.Magnitude>0 then
+local wm=c.CFrame.LookVector*m.Z+c.CFrame.RightVector*m.X+c.CFrame.UpVector*m.Y
+if wm.Magnitude>0 then wm=wm.Unit end
+fcP.CFrame=fcP.CFrame+(wm*sp*dt)
+end
+end)
+else
+if fcC then fcC:Disconnect()fcC=nil end
+if fcP then fcP:Destroy()fcP=nil end
+if fcS.minZ then pl.CameraMinZoomDistance=fcS.minZ end
+if fcS.maxZ then pl.CameraMaxZoomDistance=fcS.maxZ end
+if char then
+local r=char:FindFirstChild("HumanoidRootPart")
+if r and fcS.anc~=nil then r.Anchored=fcS.anc end
+end
+if c and char then c.CameraSubject=char:FindFirstChildOfClass("Humanoid")or char:FindFirstChild("Head")end
+fcS={}
+end
+end)
+table.insert(cFns,function()
+if fcC then fcC:Disconnect()end
+if fcP then fcP:Destroy()end
+end)
+local SG2=Color3.fromRGB(150,160,180)
+local TL=Color3.fromRGB(0,150,170)
+lb(sP,"🚀 SERVER HOP",11,Enum.Font.GothamBold,AB,UDim2.new(0,0,0,0),UDim2.new(1,0,0,18),Enum.TextXAlignment.Left).LayoutOrder=3
+local mF=Instance.new("Frame")
+mF.LayoutOrder=4
+mF.Size=UDim2.new(1,0,0,54)
+mF.BackgroundColor3=D
+mF.BorderSizePixel=0
+mF.Parent=sP
+cn(mF,8)
+lb(mF,"👥 MAX PLAYERS",10,Enum.Font.GothamBold,W,UDim2.new(0,8,0,4),UDim2.new(1,-16,0,18),Enum.TextXAlignment.Left)
+local mI=Instance.new("TextBox")
+mI.Size=UDim2.new(1,-16,0,24)
+mI.Position=UDim2.new(0,8,0,24)
+mI.BackgroundColor3=BT
+mI.Text="5"
+mI.TextSize=13
+mI.Font=Enum.Font.GothamBold
+mI.TextColor3=W
+mI.ClearTextOnFocus=false
+mI.Parent=mF
+cn(mI,6)
+mI.FocusLost:Connect(function()
+local v=tonumber(mI.Text)
+if v and v>=1 then mI.Text=tostring(math.floor(v))else mI.Text="5"end
+end)
+local hB=mkB(sP,"🚀 HOP SERVER",5)
+hB.BackgroundColor3=AB
+local rJ=mkB(sP,"🔄 REJOIN",6)
+local rN=mkB(sP,"🎲 RANDOM",7)
+local sL=lb(sP,"Status: Ready 💡",10,Enum.Font.GothamBold,G,UDim2.new(0,0,0,0),UDim2.new(1,0,0,16),Enum.TextXAlignment.Left)
+sL.LayoutOrder=8
+local function st(t,c)sL.Text="Status: "..t sL.TextColor3=c or G end
+local function hG(u)
+local o,r=pcall(function()return game:HttpGet(u)end)
+if o and r then return r end
+local rq=(typeof(request)=="function"and request)or(typeof(http_request)=="function"and http_request)or(syn and syn.request)
+if rq then
+local o2,r2=pcall(function()return rq({Url=u,Method="GET"})end)
+if o2 and r2 and r2.Body then return r2.Body end
+end
+return nil
+end
+local function fS()
+local b=hG("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100")
+if not b then return nil end
+local o,d=pcall(function()return H:JSONDecode(b)end)
+if not o or not d or not d.data then return nil end
+local l={}
+for _,s in ipairs(d.data)do
+if s.id~=game.JobId and s.playing and s.maxPlayers and s.playing<s.maxPlayers then
+table.insert(l,{id=s.id,playing=s.playing,maxPlayers=s.maxPlayers})
+end
+end
+return l
+end
+local function jS(id)
+st("Teleporting... 🚀",G)
+local o=pcall(function()T:TeleportToPlaceInstance(game.PlaceId,id,pl)end)
+if not o then st("Failed ❌",Rr)end
+end
+local bz=false
+local function hT(m)
+if bz then return end
+bz=true
+st("Searching... 🔎",SG2)
+local sv=fS()
+if not sv then st("Gagal load ❌",Rr)bz=false return end
+local mx=tonumber(mI.Text)or 5
+local pl2={}
+for _,s in ipairs(sv)do
+if m=="random"or s.playing<=mx then table.insert(pl2,s)end
+end
+if #pl2==0 then st("No server ⚠️",Color3.fromRGB(255,190,70))bz=false return end
+local pk=pl2[math.random(1,#pl2)]
+bz=false
+jS(pk.id)
+end
+hB.MouseButton1Click:Connect(function()hT("hop")end)
+rN.MouseButton1Click:Connect(function()hT("random")end)
+rJ.MouseButton1Click:Connect(function()jS(game.JobId)end)
+local fF=Instance.new("Frame")
+fF.LayoutOrder=9
+fF.Size=UDim2.new(1,0,0,50)
+fF.BackgroundColor3=D
+fF.Parent=sP
+cn(fF,8)
+lb(fF,"🔎 FILTER",10,Enum.Font.GothamBold,W,UDim2.new(0,8,0,3),UDim2.new(1,-16,0,16),Enum.TextXAlignment.Left)
+local fR=Instance.new("Frame")
+fR.Size=UDim2.new(1,-16,0,24)
+fR.Position=UDim2.new(0,8,0,21)
+fR.BackgroundTransparency=1
+fR.Parent=fF
+local fL=Instance.new("UIListLayout")
+fL.FillDirection=Enum.FillDirection.Horizontal
+fL.Padding=UDim.new(0,4)
+fL.Parent=fR
+local aF=nil
+local fBt={}
+local rL
+local function mkF(k,t)
+local b=Instance.new("TextButton")
+b.Size=UDim2.new(1/3,-3,1,0)
+b.BackgroundColor3=BT
+b.Text=t
+b.TextSize=10
+b.Font=Enum.Font.GothamBold
+b.TextColor3=W
+b.AutoButtonColor=false
+b.Parent=fR
+cn(b,6)
+fBt[k]=b
+b.MouseButton1Click:Connect(function()
+aF=(aF==k)and nil or k
+for kk,bb in pairs(fBt)do bb.BackgroundColor3=(kk==aF)and AB or BT end
+if rL then rL()end
+end)
+end
+mkF("few","🟢 Few")
+mkF("medium","🟡 Med")
+mkF("many","🔴 Many")
+local rB=mkB(sP,"⚡ REFRESH LIST",10)
+rB.BackgroundColor3=TL
+local lF=Instance.new("ScrollingFrame")
+lF.LayoutOrder=11
+lF.Size=UDim2.new(1,0,0,130)
+lF.BackgroundColor3=D
+lF.BorderSizePixel=0
+lF.ScrollBarThickness=3
+lF.ScrollBarImageColor3=AB
+lF.CanvasSize=UDim2.new(0,0,0,0)
+lF.AutomaticCanvasSize=Enum.AutomaticSize.Y
+lF.Parent=sP
+cn(lF,8)
+local lP=Instance.new("UIPadding")
+lP.PaddingTop=UDim.new(0,4)
+lP.PaddingBottom=UDim.new(0,4)
+lP.PaddingLeft=UDim.new(0,4)
+lP.PaddingRight=UDim.new(0,4)
+lP.Parent=lF
+local lL=Instance.new("UIListLayout")
+lL.Padding=UDim.new(0,4)
+lL.SortOrder=Enum.SortOrder.LayoutOrder
+lL.Parent=lF
+local sC={}
+local function mFi(s)
+if not aF then return true end
+local r=s.playing/s.maxPlayers
+if aF=="few"then return r<=.34 end
+if aF=="medium"then return r>.34 and r<=.67 end
+return r>.67
+end
+rL=function()
+for _,c in ipairs(lF:GetChildren())do
+if c:IsA("TextButton")or c:IsA("TextLabel")then c:Destroy()end
+end
+local sh=0
+for i,s in ipairs(sC)do
+if mFi(s)then
+sh=sh+1
+local r=Instance.new("TextButton")
+r.LayoutOrder=i
+r.Size=UDim2.new(1,0,0,28)
+r.BackgroundColor3=BT
+r.Text=""
+r.AutoButtonColor=false
+r.Parent=lF
+cn(r,6)
+lb(r,string.format("👥 %d/%d",s.playing,s.maxPlayers),10,Enum.Font.GothamBold,W,UDim2.new(0,8,0,0),UDim2.new(.65,0,1,0),Enum.TextXAlignment.Left)
+lb(r,"JOIN ▶",9,Enum.Font.GothamBold,G,UDim2.new(.65,0,0,0),UDim2.new(.35,-8,1,0),Enum.TextXAlignment.Right)
+r.MouseButton1Click:Connect(function()jS(s.id)end)
+end
+end
+if sh==0 then
+local e=lb(lF,#sC==0 and"Tap refresh"or"No match",10,Enum.Font.Gotham,GY,UDim2.new(0,0,0,0),UDim2.new(1,0,0,28))
+e.LayoutOrder=1
+end
+end
+rB.MouseButton1Click:Connect(function()
+if bz then return end
+bz=true
+rB.Text="⏳ Loading..."
+st("Loading... 🔎",SG2)
+local sv=fS()
+bz=false
+rB.Text="⚡ REFRESH LIST"
+if not sv then st("Gagal ❌",Rr)return end
+sC=sv
+rL()
+st("Found "..#sv.." ✅",G)
+end)
+rL()
+local aOn=false
+local aG
+local aOD=nil
+local function rAB()
+if aG then aG:Destroy()aG=nil end
+local h=char and char:FindFirstChildOfClass("Humanoid")
+if h and aOD then h.DisplayDistanceType=aOD end
+aOD=nil
+end
+local function aAB()
+rAB()
+if not aOn or not char then return end
+local hd=char:FindFirstChild("Head")
+if not hd then return end
+local h=char:FindFirstChildOfClass("Humanoid")
+if h then aOD=h.DisplayDistanceType h.DisplayDistanceType=Enum.HumanoidDisplayDistanceType.None end
+local g=Instance.new("BillboardGui")
+g.Adornee=hd
+g.Size=UDim2.new(0,220,0,40)
+g.StudsOffset=Vector3.new(0,2.6,0)
+g.AlwaysOnTop=true
+g.Parent=sg
+local r=Instance.new("Frame")
+r.Size=UDim2.new(1,0,0,22)
+r.BackgroundTransparency=1
+r.Parent=g
+local u=Instance.new("UIListLayout")
+u.FillDirection=Enum.FillDirection.Horizontal
+u.HorizontalAlignment=Enum.HorizontalAlignment.Center
+u.VerticalAlignment=Enum.VerticalAlignment.Center
+u.Padding=UDim.new(0,5)
+u.Parent=r
+local n=Instance.new("TextLabel")
+n.AutomaticSize=Enum.AutomaticSize.X
+n.Size=UDim2.new(0,0,1,0)
+n.BackgroundTransparency=1
+n.Text=pl.DisplayName
+n.TextColor3=W
+n.TextSize=16
+n.Font=Enum.Font.GothamBold
+n.TextStrokeTransparency=.4
+n.Parent=r
+local c=Instance.new("ImageLabel")
+c.Size=UDim2.new(0,18,0,18)
+c.BackgroundTransparency=1
+c.Image="rbxassetid://6031075931"
+c.ImageColor3=VB
+c.ScaleType=Enum.ScaleType.Fit
+c.Parent=r
+local rl=Instance.new("TextLabel")
+rl.Size=UDim2.new(1,0,0,14)
+rl.Position=UDim2.new(0,0,0,24)
+rl.BackgroundTransparency=1
+rl.Text="@"..pl.Name
+rl.TextColor3=Color3.fromRGB(190,205,225)
+rl.TextSize=11
+rl.Font=Enum.Font.GothamBold
+rl.Parent=g
+aG=g
+end
+lb(sP,"✔ VERIFIED",11,Enum.Font.GothamBold,AB,UDim2.new(0,0,0,0),UDim2.new(1,0,0,18),Enum.TextXAlignment.Left).LayoutOrder=-2
+local aB=mkB(sP,"✔ VERIFIED • OFF",-1)
+aB.MouseButton1Click:Connect(function()
+aOn=not aOn
+aB.Text=aOn and"✔ VERIFIED • ON"or"✔ VERIFIED • OFF"
+aB.BackgroundColor3=aOn and ON or BT
+aAB()
+toast(aOn and"✔ ON"or"✔ OFF",aOn and G or Rr)
+end)
+local function mkPB(t,o)return mkB(pP,t,o)end
+lb(pP,"👤 PLAYER",11,Enum.Font.GothamBold,AB,UDim2.new(0,0,0,0),UDim2.new(1,0,0,18),Enum.TextXAlignment.Left).LayoutOrder=0
+local rB2=mkPB("💀 RESET",1)
+rB2.MouseButton1Click:Connect(function()
+local h=hm()
+if h then h.Health=0 end
+toast("💀 Reset",Rr)
+end)
+local selP=nil
+local spB=mkPB("🎯 SELECT PLAYER",2)
+local spF=Instance.new("Frame")
+spF.LayoutOrder=3
+spF.Size=UDim2.new(1,0,0,120)
+spF.BackgroundColor3=D
+spF.Visible=false
+spF.Parent=pP
+cn(spF,8)
+local spS2=Instance.new("ScrollingFrame")
+spS2.Size=UDim2.new(1,-8,1,-8)
+spS2.Position=UDim2.new(0,4,0,4)
+spS2.BackgroundTransparency=1
+spS2.ScrollBarThickness=3
+spS2.CanvasSize=UDim2.new(0,0,0,0)
+spS2.AutomaticCanvasSize=Enum.AutomaticSize.Y
+spS2.Parent=spF
+local spL2=Instance.new("UIListLayout")
+spL2.Padding=UDim.new(0,3)
+spL2.Parent=spS2
+local function rSL()
+for _,c in ipairs(spS2:GetChildren())do if c:IsA("TextButton")then c:Destroy()end end
+for _,p in ipairs(P:GetPlayers())do
+if p~=pl then
+local r=Instance.new("TextButton")
+r.Size=UDim2.new(1,0,0,28)
+r.BackgroundColor3=(selP==p)and ON or BT
+r.Text=p.DisplayName
+r.TextSize=10
+r.Font=Enum.Font.GothamBold
+r.TextColor3=W
+r.AutoButtonColor=false
+r.Parent=spS2
+cn(r,6)
+r.MouseButton1Click:Connect(function()
+selP=(selP==p)and nil or p
+rSL()
+end)
+end
+end
+end
+spB.MouseButton1Click:Connect(function()
+spF.Visible=not spF.Visible
+if spF.Visible then rSL()end
+end)
+local tpB=mkPB("🚀 TELEPORT",4)
+tpB.MouseButton1Click:Connect(function()
+if not selP then toast("⚠️ Pilih player",Color3.fromRGB(255,190,70))return end
+local th=selP.Character and selP.Character:FindFirstChild("HumanoidRootPart")
+local mh=hr()
+if th and mh then
+mh.CFrame=th.CFrame*CFrame.new(0,0,3)
+toast("🚀 @"..selP.Name,G)
+end
+end)
+local cTg=nil
+local scB2=mkPB("🎭 SELECT COPY",5)
+local scF2=Instance.new("Frame")
+scF2.LayoutOrder=6
+scF2.Size=UDim2.new(1,0,0,130)
+scF2.BackgroundColor3=D
+scF2.Visible=false
+scF2.Parent=pP
+cn(scF2,8)
+local scS2=Instance.new("ScrollingFrame")
+scS2.Size=UDim2.new(1,-8,1,-8)
+scS2.Position=UDim2.new(0,4,0,4)
+scS2.BackgroundTransparency=1
+scS2.ScrollBarThickness=3
+scS2.CanvasSize=UDim2.new(0,0,0,0)
+scS2.AutomaticCanvasSize=Enum.AutomaticSize.Y
+scS2.Parent=scF2
+local scL2=Instance.new("UIListLayout")
+scL2.Padding=UDim.new(0,3)
+scL2.Parent=scS2
+local caB=mkPB("🎭 COPY AVATAR",7)
+local raB=mkPB("♻️ RESTORE",8)
+local function rCL()
+for _,c in ipairs(scS2:GetChildren())do if c:IsA("TextButton")then c:Destroy()end end
+for _,p in ipairs(P:GetPlayers())do
+if p~=pl then
+local r=Instance.new("TextButton")
+r.Size=UDim2.new(1,0,0,28)
+r.BackgroundColor3=(cTg==p)and ON or BT
+r.Text=p.DisplayName.." (@"..p.Name..")"
+r.TextSize=9
+r.Font=Enum.Font.GothamBold
+r.TextColor3=W
+r.AutoButtonColor=false
+r.Parent=scS2
+cn(r,6)
+r.MouseButton1Click:Connect(function()
+cTg=(cTg==p)and nil or p
+rCL()
+end)
+end
+end
+end
+scB2.MouseButton1Click:Connect(function()
+scF2.Visible=not scF2.Visible
+if scF2.Visible then rCL()end
+end)
+caB.MouseButton1Click:Connect(function()
+if not cTg then toast("⚠️ Pilih target",Color3.fromRGB(255,190,70))return end
+toast("🎭 Copying @"..cTg.Name.."...",B)
+task.spawn(function()
+local uid=cTg.UserId
+local h=hm()
+if not h then toast("⚠️ Belum spawn",Rr)return end
+local o,d=pcall(function()return P:GetHumanoidDescriptionFromUserId(uid)end)
+if o and d then pcall(function()h:ApplyDescriptionClientServer(d)end)end
+local ao,am=pcall(function()return P:CreateHumanoidModelFromUserId(uid)end)
+if ao and am then
+local ta=am:FindFirstChild("Animate")
+if ta then
+local ma=char and char:FindFirstChild("Animate")
+if ma then ma:Destroy()end
+local na=ta:Clone()
+na.Parent=char
+task.wait(.3)
+pcall(function()na.Enabled=false task.wait(.1)na.Enabled=true end)
+end
+pcall(function()am:Destroy()end)
+end
+toast("✅ Copied!",G)
+end)
+end)
+raB.MouseButton1Click:Connect(function()
+local h=hm()
+if h then h.Health=0 end
+toast("♻️ Respawn",B)
+end)
+local fb2=mkPB("🎯 FOLLOW • OFF",9)
+local foOn=false
+local foC
+fb2.MouseButton1Click:Connect(function()
+if not selP then toast("⚠️ Pilih player",Color3.fromRGB(255,190,70))return end
+foOn=not foOn
+fb2.Text=foOn and"🎯 FOLLOW • ON"or"🎯 FOLLOW • OFF"
+fb2.BackgroundColor3=foOn and ON or BT
+toast(foOn and("🎯 @"..selP.Name)or"🎯 OFF",foOn and G or Rr)
+if foOn then
+foC=R.Heartbeat:Connect(function()
+if not foOn or not selP then return end
+local th=selP.Character and selP.Character:FindFirstChild("HumanoidRootPart")
+local mh=hr()
+if th and mh then mh.CFrame=mh.CFrame:Lerp(th.CFrame*CFrame.new(0,0,3),.15)end
+end)
+else
+if foC then foC:Disconnect()foC=nil end
+end
+end)
+local hB2=mkPB("🚫 HIDE ALL • OFF",10)
+local hOn=false
+local hC2
+local hO2={}
+local function hCh(c)
+if not c or c==char then return end
+for _,d in ipairs(c:GetDescendants())do
+if d:IsA("BasePart")or d:IsA("Decal")then
+if hO2[d]==nil then hO2[d]=d.Transparency end
+d.Transparency=1
+end
+end
+end
+local function rAl()
+for o,t in pairs(hO2)do if o and o.Parent then o.Transparency=t end end
+hO2={}
+end
+hB2.MouseButton1Click:Connect(function()
+hOn=not hOn
+hB2.Text=hOn and"🚫 HIDE ALL • ON"or"🚫 HIDE ALL • OFF"
+hB2.BackgroundColor3=hOn and ON or BT
+toast(hOn and"🚫 Hidden"or"🚫 Visible",hOn and G or Rr)
+if hOn then
+for _,p in ipairs(P:GetPlayers())do if p~=pl then hCh(p.Character)end end
+hC2=workspace.DescendantAdded:Connect(function(d)
+if not hOn then return end
+local m=d:FindFirstAncestorOfClass("Model")
+if m and P:GetPlayerFromCharacter(m)and m~=char then
+task.wait(.1)
+hCh(m)
+end
+end)
+else
+if hC2 then hC2:Disconnect()hC2=nil end
+rAl()
+end
+end)
+local specT=nil
+local specOn=false
+local specC
+local specS={}
+local specBtn=mkPB("👀 SPECTATE PLAYER • OFF",11)
+local specF=Instance.new("Frame")
+specF.LayoutOrder=12
+specF.Size=UDim2.new(1,0,0,120)
+specF.BackgroundColor3=D
+specF.Visible=false
+specF.Parent=pP
+cn(specF,8)
+sk(specF,B,1)
+local specTtl=lb(specF,"Pilih player",10,Enum.Font.GothamBold,W,UDim2.new(0,8,0,4),UDim2.new(1,-16,0,16),Enum.TextXAlignment.Left)
+local specSc=Instance.new("ScrollingFrame")
+specSc.Size=UDim2.new(1,-8,1,-24)
+specSc.Position=UDim2.new(0,4,0,22)
+specSc.BackgroundTransparency=1
+specSc.ScrollBarThickness=3
+specSc.ScrollBarImageColor3=AB
+specSc.CanvasSize=UDim2.new(0,0,0,0)
+specSc.AutomaticCanvasSize=Enum.AutomaticSize.Y
+specSc.Parent=specF
+local specL=Instance.new("UIListLayout")
+specL.Padding=UDim.new(0,3)
+specL.Parent=specSc
+local specGo=mkPB("▶️ START SPECTATE",13)
+local function updSpec()
+if specT then
+specTtl.Text="Target: "..specT.DisplayName
+specGo.Text="▶️ SPECTATE @"..specT.Name
+else
+specTtl.Text="Pilih player"
+specGo.Text="▶️ START SPECTATE"
+end
+end
+local function rSpec()
+for _,c in ipairs(specSc:GetChildren())do if c:IsA("TextButton")then c:Destroy()end end
+if specT and specT.Parent~=P then specT=nil updSpec()end
+for _,p in ipairs(P:GetPlayers())do
+if p~=pl then
+local isSel=(specT==p)
+local r=Instance.new("TextButton")
+r.Name=p.Name
+r.Size=UDim2.new(1,0,0,28)
+r.BackgroundColor3=isSel and ON or BT
+r.Text=""
+r.AutoButtonColor=false
+r.Parent=specSc
+cn(r,6)
+local aF=Instance.new("Frame")
+aF.Size=UDim2.new(0,24,0,24)
+aF.Position=UDim2.new(0,4,.5,-12)
+aF.BackgroundColor3=BG
+aF.Parent=r
+cn(aF,12)
+local aI=Instance.new("ImageLabel")
+aI.Size=UDim2.new(1,-2,1,-2)
+aI.Position=UDim2.new(0,1,0,1)
+aI.BackgroundTransparency=1
+aI.ScaleType=Enum.ScaleType.Crop
+aI.Parent=aF
+cn(aI,11)
+task.spawn(function()
+local o,t=pcall(function()return P:GetUserThumbnailAsync(p.UserId,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size48x48)end)
+if o then aI.Image=t end
+end)
+lb(r,p.DisplayName,10,Enum.Font.GothamBold,W,UDim2.new(0,34,0,0),UDim2.new(1,-64,1,0),Enum.TextXAlignment.Left).TextTruncate=Enum.TextTruncate.AtEnd
+local ck=Instance.new("TextLabel")
+ck.Size=UDim2.new(0,20,1,0)
+ck.Position=UDim2.new(1,-24,0,0)
+ck.BackgroundTransparency=1
+ck.Text="✓"
+ck.TextSize=14
+ck.Font=Enum.Font.GothamBold
+ck.TextColor3=G
+ck.Visible=isSel
+ck.Parent=r
+r.MouseButton1Click:Connect(function()
+if specT==p then specT=nil else specT=p end
+updSpec()
+rSpec()
+end)
+end
+end
+end
+specBtn.MouseButton1Click:Connect(function()
+specF.Visible=not specF.Visible
+if specF.Visible then rSpec()end
+end)
+specGo.MouseButton1Click:Connect(function()
+if specOn then
+specOn=false
+specBtn.Text="👀 SPECTATE PLAYER • OFF"
+specBtn.BackgroundColor3=BT
+specGo.Text="▶️ START SPECTATE"
+toast("👀 OFF",Rr)
+if specC then specC:Disconnect()specC=nil end
+if char then
+local r2=char:FindFirstChild("HumanoidRootPart")
+if r2 and specS.anc~=nil then r2.Anchored=specS.anc end
+local c=workspace.CurrentCamera
+if c then c.CameraSubject=char:FindFirstChildOfClass("Humanoid")or char:FindFirstChild("Head")end
+end
+specS={}
+else
+if not specT then toast("⚠️ Pilih player dulu",Color3.fromRGB(255,190,70))return end
+specOn=true
+specBtn.Text="👀 SPECTATE • ON"
+specBtn.BackgroundColor3=ON
+specGo.Text="⏹️ STOP SPECTATE"
+toast("👀 @"..specT.Name,G)
+if char then
+local r2=char:FindFirstChild("HumanoidRootPart")
+if r2 then specS.anc=r2.Anchored r2.Anchored=true end
+end
+specC=R.Heartbeat:Connect(function()
+if not specOn or not specT then return end
+if not specT.Character then
+for _,p in ipairs(P:GetPlayers())do
+if p~=pl and p.Character then specT=p updSpec()rSpec()break end
+end
+return
+end
+local h=specT.Character:FindFirstChildOfClass("Humanoid")
+local c=workspace.CurrentCamera
+if h and c.CameraSubject~=h then
+c.CameraSubject=h
+c.CameraType=Enum.CameraType.Custom
+end
+end)
+end
+end)
+table.insert(cFns,function()if specC then specC:Disconnect()end end)
+lb(tP,"📍 TELEPORT SLOTS",11,Enum.Font.GothamBold,AB,UDim2.new(0,0,0,0),UDim2.new(1,0,0,18),Enum.TextXAlignment.Left).LayoutOrder=0
+local tS2={}
+for i=1,10 do
+local r=Instance.new("Frame")
+r.LayoutOrder=i
+r.Size=UDim2.new(1,0,0,32)
+r.BackgroundColor3=D
+r.Parent=tP
+cn(r,6)
+lb(r,"SLOT "..i,10,Enum.Font.GothamBold,W,UDim2.new(0,8,0,0),UDim2.new(1,-120,1,0),Enum.TextXAlignment.Left)
+local sb=Instance.new("TextButton")
+sb.Size=UDim2.new(0,50,0,24)
+sb.Position=UDim2.new(1,-110,.5,-12)
+sb.BackgroundColor3=BT
+sb.Text="💾"
+sb.TextSize=12
+sb.Font=Enum.Font.GothamBold
+sb.TextColor3=W
+sb.Parent=r
+cn(sb,5)
+local gb=Instance.new("TextButton")
+gb.Size=UDim2.new(0,50,0,24)
+gb.Position=UDim2.new(1,-56,.5,-12)
+gb.BackgroundColor3=BT
+gb.Text="🚀"
+gb.TextSize=12
+gb.Font=Enum.Font.GothamBold
+gb.TextColor3=W
+gb.Parent=r
+cn(gb,5)
+sb.MouseButton1Click:Connect(function()
+local r2=hr()
+if r2 then tS2[i]=r2.CFrame sb.Text="✅"task.delay(1,function()sb.Text="💾"end)end
+end)
+gb.MouseButton1Click:Connect(function()
+local r2=hr()
+if r2 and tS2[i]then r2.CFrame=tS2[i]gb.Text="✅"task.delay(1,function()gb.Text="🚀"end)end
+end)
+end
+local ub=Instance.new("Frame")
+ub.Size=UDim2.new(1,-16,0,38)
+ub.Position=UDim2.new(0,8,1,-44)
+ub.BackgroundColor3=D
+ub.BorderSizePixel=0
+ub.Parent=mf
+cn(ub,8)
+sk(ub,B,1)
+local uaf=Instance.new("Frame")
+uaf.Size=UDim2.new(0,28,0,28)
+uaf.Position=UDim2.new(0,6,.5,-14)
+uaf.BackgroundColor3=BG
+uaf.Parent=ub
+cn(uaf,14)
+sk(uaf,AB,1)
+local uai=Instance.new("ImageLabel")
+uai.Size=UDim2.new(1,-4,1,-4)
+uai.Position=UDim2.new(0,2,0,2)
+uai.BackgroundTransparency=1
+uai.ScaleType=Enum.ScaleType.Crop
+uai.Parent=uaf
+cn(uai,12)
+task.spawn(function()
+local o,t=pcall(function()return P:GetUserThumbnailAsync(pl.UserId,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size48x48)end)
+if o then uai.Image=t end
+end)
+lb(ub,pl.DisplayName,10,Enum.Font.GothamBold,W,UDim2.new(0,40,0,3),UDim2.new(1,-46,0,16),Enum.TextXAlignment.Left).TextTruncate=Enum.TextTruncate.AtEnd
+lb(ub,"@"..pl.Name,8,Enum.Font.Gotham,GY,UDim2.new(0,40,0,19),UDim2.new(1,-46,0,14),Enum.TextXAlignment.Left).TextTruncate=Enum.TextTruncate.AtEnd
+pl.CharacterAdded:Connect(function(c)
+char=c
+fOn=false
+if fBV then fBV:Destroy()fBV=nil end
+if fBG then fBG:Destroy()fBG=nil end
+fBtn.Text="✈️ FLY • OFF"
+fBtn.BackgroundColor3=BT
+fc.Visible=false
+c:WaitForChild("Humanoid")
+if sOn then aS()end
+hG()
+aV()
+aAB()
+end)
+local dg,ds,sp2=false,nil,nil
+tb.InputBegan:Connect(function(i)
+if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+dg=true
+ds=i.Position
+sp2=mf.Position
+i.Changed:Connect(function()if i.UserInputState==Enum.UserInputState.End then dg=false end end)
+end
+end)
+U.InputChanged:Connect(function(i)
+if dg and(i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch)then
+local d=i.Position-ds
+mf.Position=UDim2.new(sp2.X.Scale,sp2.X.Offset+d.X,sp2.Y.Scale,sp2.Y.Offset+d.Y)
+end
+end)
+local lg=Instance.new("TextButton")
+lg.Size=UDim2.new(0,44,0,44)
+lg.Position=UDim2.new(0,15,.5,-22)
+lg.BackgroundColor3=BG
+lg.Text="$"
+lg.TextSize=18
+lg.Font=Enum.Font.GothamMedium
+lg.TextColor3=Color3.fromRGB(255,215,0)
+lg.Parent=sg
+cn(lg,22)
+sk(lg,Color3.fromRGB(255,215,0),1.5)
+lg.MouseButton1Click:Connect(function()mf.Visible=not mf.Visible end)
+for _,o in ipairs(mf:GetDescendants())do
+if(o:IsA("Frame")or o:IsA("TextButton")or o:IsA("TextBox")or o:IsA("ScrollingFrame"))
+and o.BackgroundTransparency==0 and o~=mf and o~=tb then
+o.BackgroundTransparency=.5
+end
+end
+print("✅ UNIVERSAL Loaded!")
+end)
+if ok then
+pcall(function()SG:SetCore("SendNotification",{Title="UNIVERSAL",Text="Loaded ✔",Duration=4})end)
+else
+warn("Error: "..tostring(err))
+end
