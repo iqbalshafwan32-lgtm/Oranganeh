@@ -1,0 +1,1361 @@
+local __ok, __err = xpcall(function()
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
+local TextChatService = game:GetService("TextChatService")
+local StarterGuiSvc = game:GetService("StarterGui")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local COL_WHITE = Color3.fromRGB(255, 255, 255)
+local COL_GREEN = Color3.fromRGB(80, 220, 120)
+local COL_RED = Color3.fromRGB(255, 80, 80)
+local COL_BLUE = Color3.fromRGB(70, 130, 255)
+local function showToast(text, color)
+    pcall(function()
+        color = color or COL_BLUE
+        local toast = Instance.new("Frame")
+        toast.Size = UDim2.new(0, 260, 0, 44)
+        toast.Position = UDim2.new(0.5, -130, 0, -60)
+        toast.BackgroundColor3 = Color3.fromRGB(18, 22, 35)
+        toast.BackgroundTransparency = 0.1
+        toast.BorderSizePixel = 0
+        toast.ZIndex = 99999
+        toast.Parent = player.PlayerGui
+        local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, 10) c.Parent = toast
+        local s = Instance.new("UIStroke") s.Color = color s.Thickness = 2 s.Parent = toast
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -20, 1, 0)
+        lbl.Position = UDim2.new(0, 10, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = text
+        lbl.TextColor3 = COL_WHITE
+        lbl.TextSize = 12
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextWrapped = true
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.ZIndex = 100000
+        lbl.Parent = toast
+        TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0.5, -130, 0, 20)
+        }):Play()
+        task.delay(3, function()
+            if not toast or not toast.Parent then return end
+            local out = TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                Position = UDim2.new(0.5, -130, 0, -60)
+            })
+            out:Play()
+            out.Completed:Connect(function() if toast then toast:Destroy() end end)
+        end)
+    end)
+end
+local BG_BLACK = Color3.fromRGB(10, 10, 15)
+local BG_DARK = Color3.fromRGB(18, 22, 35)
+local BG_BUTTON = Color3.fromRGB(25, 32, 50)
+local BORDER_BLUE = Color3.fromRGB(60, 120, 255)
+local ACCENT_BLUE = Color3.fromRGB(70, 130, 255)
+local WHITE = Color3.fromRGB(255, 255, 255)
+local GREY = Color3.fromRGB(150, 160, 180)
+local GREEN = Color3.fromRGB(80, 220, 120)
+local RED = Color3.fromRGB(255, 80, 80)
+local ON_COLOR = Color3.fromRGB(40, 80, 40)
+local VERIFIED_BLUE = Color3.fromRGB(29, 161, 242)local function corner(o, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = o
+end
+local function stroke(o, color, t)
+    local s = Instance.new("UIStroke")
+    s.Color = color or BORDER_BLUE
+    s.Thickness = t or 2
+    s.Parent = o
+    return s
+end
+local function newLabel(parent, text, size, font, color, pos, sz, align)
+    local l = Instance.new("TextLabel")
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextSize = size
+    l.Font = font
+    l.TextColor3 = color
+    l.Position = pos
+    l.Size = sz
+    l.TextXAlignment = align or Enum.TextXAlignment.Center
+    l.TextYAlignment = Enum.TextYAlignment.Center
+    l.Parent = parent
+    return l
+end
+local function getHumanoid()
+    return character and character:FindFirstChildOfClass("Humanoid")
+end
+local function getHRP()
+    return character and character:FindFirstChild("HumanoidRootPart")
+end
+local old = player:WaitForChild("PlayerGui"):FindFirstChild("AllMapHubGui")
+if old then old:Destroy() end
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AllMapHubGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player.PlayerGui
+
+-- INFO BAR DI LUAR UI
+local infoBar = Instance.new("Frame")
+infoBar.Size = UDim2.new(0, 340, 0, 24)
+infoBar.Position = UDim2.new(0.5, -170, 0, 8)
+infoBar.BackgroundColor3 = Color3.fromRGB(12, 15, 25)
+infoBar.BackgroundTransparency = 0.15
+infoBar.BorderSizePixel = 0
+infoBar.ZIndex = 5000
+infoBar.Parent = screenGui
+corner(infoBar, 12)
+stroke(infoBar, ACCENT_BLUE, 1.5)
+pcall(function() infoBar.Parent = game:GetService("CoreGui") end)
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, -16, 1, 0)
+infoLabel.Position = UDim2.new(0, 8, 0, 0)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "📊 Tap info panel"
+infoLabel.TextColor3 = GREY
+infoLabel.TextSize = 11
+infoLabel.Font = Enum.Font.GothamBold
+infoLabel.ZIndex = 5001
+infoLabel.Parent = infoBar
+local infoBtn = Instance.new("TextButton")
+infoBtn.Size = UDim2.new(1, 0, 1, 0)
+infoBtn.BackgroundTransparency = 1
+infoBtn.Text = ""
+infoBtn.ZIndex = 5002
+infoBtn.Parent = infoBarlocal infoOn = false
+local fpsCount = 0
+local fpsTimer = 0
+local currentFPS = 0
+local pingValue = 0
+local infoConn
+local fpsConn = RunService.RenderStepped:Connect(function(dt)
+    fpsCount = fpsCount + 1
+    fpsTimer = fpsTimer + dt
+    if fpsTimer >= 1 then
+        currentFPS = fpsCount
+        fpsCount = 0
+        fpsTimer = 0
+    end
+end)
+local pingConn = RunService.Heartbeat:Connect(function()
+    pcall(function()
+        local stat = Stats.Network.ServerStatsItem
+        if stat and stat["Data Ping"] then
+            pingValue = math.floor(stat["Data Ping"]:GetValue())
+        end
+    end)
+end)
+infoBtn.MouseButton1Click:Connect(function()
+    infoOn = not infoOn
+    showToast(infoOn and "📊 Info ON + Low Graphics" or "📊 Info OFF",
+        infoOn and COL_GREEN or COL_RED)
+    if infoOn then
+        pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+        if infoConn then infoConn:Disconnect() end
+        infoConn = RunService.RenderStepped:Connect(function()
+            if not infoOn then return end
+            local mem = 0
+            pcall(function() mem = math.floor(Stats:GetTotalMemoryUsageMb()) end)
+            local players = #Players:GetPlayers()
+            infoLabel.Text = string.format("📊 FPS:%d | 📶%dms | 👥%d | 💾%dMB",
+                currentFPS, pingValue, players, mem)
+            infoLabel.TextColor3 = COL_GREEN
+        end)
+    else
+        if infoConn then infoConn:Disconnect() infoConn = nil end
+        pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic end)
+        infoLabel.Text = "📊 Tap info panel"
+        infoLabel.TextColor3 = GREY
+    end
+end)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.Size = UDim2.new(0, 265, 0, 375)
+mainFrame.BackgroundColor3 = BG_BLACK
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+corner(mainFrame, 14)
+stroke(mainFrame, BORDER_BLUE, 2)
+
+-- BACKGROUND IMAGE
+local bgImage = Instance.new("ImageLabel")
+bgImage.Name = "Background"
+bgImage.Size = UDim2.new(1, 0, 1, 0)
+bgImage.BackgroundTransparency = 1
+bgImage.Image = "rbxassetid://134262192520482"
+bgImage.ScaleType = Enum.ScaleType.Crop
+bgImage.ZIndex = 0
+bgImage.Parent = mainFrame
+corner(bgImage, 12)
+task.spawn(function()
+    local ok, objs = pcall(function()
+        return game:GetObjects("rbxassetid://134262192520482")
+    end)
+    if ok and objs and objs[1] then
+        local o = objs[1]
+        local d = (o:IsA("Decal") or o:IsA("Texture")) and o or o:FindFirstChildWhichIsA("Decal", true) or o:FindFirstChildWhichIsA("Texture", true)
+        if d and d.Texture and d.Texture ~= "" then
+            bgImage.Image = d.Texture
+        end
+    end
+end)
+
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 50)
+topBar.BackgroundColor3 = BG_BLACK
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+corner(topBar, 14)
+newLabel(topBar, "🌐 UNIVERSAL", 14, Enum.Font.GothamBlack, WHITE, UDim2.new(0, 10, 0, 8), UDim2.new(1, -80, 0, 20), Enum.TextXAlignment.Left)
+newLabel(topBar, "Player Hub v15.1", 9, Enum.Font.Gotham, GREY, UDim2.new(0, 10, 0, 28), UDim2.new(1, -80, 0, 12), Enum.TextXAlignment.Left)
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 26, 0, 26)
+minBtn.Position = UDim2.new(1, -60, 0, 10)
+minBtn.BackgroundColor3 = BG_BUTTON
+minBtn.Text = "−"
+minBtn.TextSize = 14
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextColor3 = WHITE
+minBtn.AutoButtonColor = false
+minBtn.Parent = topBar
+corner(minBtn, 6)
+minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
+local cleanupFns = {}
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -30, 0, 10)
+closeBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 40)
+closeBtn.Text = "X"
+closeBtn.TextSize = 12
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextColor3 = RED
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = topBar
+corner(closeBtn, 6)
+closeBtn.MouseButton1Click:Connect(function()
+    for _, fn in ipairs(cleanupFns) do pcall(fn) end
+    screenGui:Destroy()
+end)
+
+local tabContainer = Instance.new("Frame")
+tabContainer.Size = UDim2.new(1, -16, 0, 28)
+tabContainer.Position = UDim2.new(0, 8, 0, 54)
+tabContainer.BackgroundColor3 = BG_DARK
+tabContainer.BorderSizePixel = 0
+tabContainer.Parent = mainFrame
+corner(tabContainer, 8)
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 3)
+tabLayout.Parent = tabContainerlocal pages = {}
+local tabButtons = {}
+local function makePage(name)
+    local page = Instance.new("ScrollingFrame")
+    page.Size = UDim2.new(1, -16, 1, -140)
+    page.Position = UDim2.new(0, 8, 0, 88)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.ScrollBarThickness = 3
+    page.ScrollBarImageColor3 = ACCENT_BLUE
+    page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    page.Parent = mainFrame
+    local padding = Instance.new("UIPadding")
+    padding.PaddingBottom = UDim.new(0, 8)
+    padding.Parent = page
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = page
+    pages[name] = page
+    return page
+end
+local farmPage = makePage("FARM")
+local serverPage = makePage("SERVER")
+local playerPage = makePage("PLAYER")
+local teleportPage = makePage("TELEPORT")
+local function makeTabButton(name, icon, text)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.25, -3, 1, 0)
+    btn.BackgroundColor3 = BG_BUTTON
+    btn.Text = icon .. " " .. text
+    btn.TextSize = 9
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = GREY
+    btn.AutoButtonColor = false
+    btn.Parent = tabContainer
+    corner(btn, 6)
+    btn.TextScaled = true
+    local lim = Instance.new("UITextSizeConstraint")
+    lim.MaxTextSize = 9
+    lim.Parent = btn
+    tabButtons[name] = btn
+    btn.MouseButton1Click:Connect(function()
+        for n, b in pairs(tabButtons) do
+            if n == name then
+                b.BackgroundColor3 = ACCENT_BLUE
+                b.TextColor3 = WHITE
+                pages[n].Visible = true
+            else
+                b.BackgroundColor3 = BG_BUTTON
+                b.TextColor3 = GREY
+                pages[n].Visible = false
+            end
+        end
+    end)
+end
+makeTabButton("FARM", "🌾", "FARM")
+makeTabButton("SERVER", "🖥️", "SERVER")
+makeTabButton("PLAYER", "👤", "PLAYER")
+makeTabButton("TELEPORT", "📍", "TELEPORT")
+tabButtons["FARM"].BackgroundColor3 = ACCENT_BLUE
+tabButtons["FARM"].TextColor3 = WHITE
+pages["FARM"].Visible = true
+
+local function makeButton(parent, text, order)
+    local btn = Instance.new("TextButton")
+    btn.LayoutOrder = order
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.BackgroundColor3 = BG_BUTTON
+    btn.Text = text
+    btn.TextSize = 11
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = WHITE
+    btn.AutoButtonColor = false
+    btn.Parent = parent
+    corner(btn, 8)
+    return btn
+end
+local function makeFarmButton(text, order)
+    return makeButton(farmPage, text, order)
+end
+newLabel(farmPage, " FARM / MOVEMENT", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+
+-- SPEED DENGAN INPUT
+local speedFrame = Instance.new("Frame")
+speedFrame.LayoutOrder = 1
+speedFrame.Size = UDim2.new(1, 0, 0, 52)
+speedFrame.BackgroundColor3 = BG_DARK
+speedFrame.BorderSizePixel = 0
+speedFrame.Parent = farmPage
+corner(speedFrame, 8)
+newLabel(speedFrame, "🏃 SPEED", 11, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 4), UDim2.new(1, -16, 0, 18), Enum.TextXAlignment.Left)
+local speedInput = Instance.new("TextBox")
+speedInput.Size = UDim2.new(1, -16, 0, 24)
+speedInput.Position = UDim2.new(0, 8, 0, 22)
+speedInput.BackgroundColor3 = BG_BUTTON
+speedInput.Text = "100"
+speedInput.TextSize = 12
+speedInput.Font = Enum.Font.GothamBold
+speedInput.TextColor3 = WHITE
+speedInput.ClearTextOnFocus = false
+speedInput.Parent = speedFrame
+corner(speedInput, 6)
+local speedBtn = makeFarmButton("🏃 SPEED • OFF", 2)
+local speedOn = false
+local speedValue = 100
+local function applySpeed()
+    local hum = getHumanoid()
+    if hum then hum.WalkSpeed = speedOn and speedValue or 16 end
+end
+speedInput.FocusLost:Connect(function()
+    local v = tonumber(speedInput.Text)
+    if v and v > 0 then
+        speedValue = v
+        if speedOn then applySpeed() end
+    else
+        speedInput.Text = tostring(speedValue)
+    end
+end)
+speedBtn.MouseButton1Click:Connect(function()
+    speedOn = not speedOn
+    speedBtn.Text = speedOn and "🏃 SPEED • ON" or "🏃 SPEED • OFF"
+    speedBtn.BackgroundColor3 = speedOn and ON_COLOR or BG_BUTTON
+    applySpeed()
+    showToast(speedOn and ("🏃 Speed " .. speedValue) or "🏃 Speed OFF",
+        speedOn and COL_GREEN or COL_RED)
+end)
+
+-- FLY DENGAN INPUT + ARROW BUTTONS
+local flyFrame = Instance.new("Frame")
+flyFrame.LayoutOrder = 3
+flyFrame.Size = UDim2.new(1, 0, 0, 52)
+flyFrame.BackgroundColor3 = BG_DARK
+flyFrame.BorderSizePixel = 0
+flyFrame.Parent = farmPage
+corner(flyFrame, 8)
+newLabel(flyFrame, "✈️ FLY SPEED", 11, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 4), UDim2.new(1, -16, 0, 18), Enum.TextXAlignment.Left)
+local flyInput = Instance.new("TextBox")
+flyInput.Size = UDim2.new(1, -16, 0, 24)
+flyInput.Position = UDim2.new(0, 8, 0, 22)
+flyInput.BackgroundColor3 = BG_BUTTON
+flyInput.Text = "70"
+flyInput.TextSize = 12
+flyInput.Font = Enum.Font.GothamBold
+flyInput.TextColor3 = WHITE
+flyInput.ClearTextOnFocus = false
+flyInput.Parent = flyFrame
+corner(flyInput, 6)
+local flyBtn = makeFarmButton("✈️ FLY • OFF", 4)
+local flyOn = false
+local flyBV, flyBG, flyConn
+local flyUp, flyDown = false, false
+
+local flyControlFrame = Instance.new("Frame")
+flyControlFrame.Name = "FlyControls"
+flyControlFrame.Size = UDim2.new(0, 40, 0, 86)
+flyControlFrame.Position = UDim2.new(1, -50, 0.5, -43)
+flyControlFrame.BackgroundTransparency = 1
+flyControlFrame.Visible = false
+flyControlFrame.Parent = screenGui
+corner(flyControlFrame, 10)
+local function makeFlyArrow(text, yPos)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, 0, 0, 40)
+    b.Position = UDim2.new(0, 0, 0, yPos)
+    b.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    b.BackgroundTransparency = 0.88
+    b.Text = text
+    b.TextSize = 20
+    b.TextTransparency = 0.35
+    b.Font = Enum.Font.GothamBold
+    b.TextColor3 = WHITE
+    b.AutoButtonColor = false
+    b.Parent = flyControlFrame
+    corner(b, 8)
+    return b
+end
+local flyUpBtn = makeFlyArrow("↑", 0)
+local flyDownBtn = makeFlyArrow("↓", 46)
+local function bindHold(btn, setter)
+    btn.MouseButton1Down:Connect(function() setter(true) end)
+    btn.MouseButton1Up:Connect(function() setter(false) end)
+    btn.MouseLeave:Connect(function() setter(false) end)
+end
+bindHold(flyUpBtn, function(v) flyUp = v end)
+bindHold(flyDownBtn, function(v) flyDown = v end)
+local function stopFly()
+    flyOn = false
+    flyUp, flyDown = false, false
+    if flyConn then flyConn:Disconnect() flyConn = nil end
+    if flyBV then flyBV:Destroy() flyBV = nil end
+    if flyBG then flyBG:Destroy() flyBG = nil end
+    local hum = getHumanoid()
+    if hum then
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
+    flyControlFrame.Visible = false
+    flyBtn.Text = "✈️ FLY • OFF"
+    flyBtn.BackgroundColor3 = BG_BUTTON
+end
+local function startFly()
+    local hrp, hum = getHRP(), getHumanoid()
+    if not hrp or not hum then return end
+    flyOn = true
+    flyControlFrame.Visible = true
+    flyBtn.Text = "✈️ FLY • ON"
+    flyBtn.BackgroundColor3 = ON_COLOR
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    flyBV.Velocity = Vector3.zero
+    flyBV.Parent = hrp
+    flyBG = Instance.new("BodyGyro")
+    flyBG.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    flyBG.P = 9000
+    flyBG.CFrame = hrp.CFrame
+    flyBG.Parent = hrp
+    hum.PlatformStand = true
+    flyConn = RunService.RenderStepped:Connect(function()
+        local root, h = getHRP(), getHumanoid()
+        if not root or not h or not flyBV or not flyBG then stopFly() return end
+        local cam = workspace.CurrentCamera
+        local speed = tonumber(flyInput.Text) or 70
+        local look = cam.CFrame.LookVector
+        local dir = h.MoveDirection
+        local vel = dir * speed
+        if dir.Magnitude > 0 then
+            local flat = Vector3.new(look.X, 0, look.Z)
+            if flat.Magnitude > 0 then
+                local forward = dir:Dot(flat.Unit)
+                vel = vel + Vector3.new(0, look.Y * forward * speed, 0)
+            end
+        end
+        if flyUp or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            vel = vel + Vector3.new(0, speed, 0)
+        end
+        if flyDown or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            vel = vel - Vector3.new(0, speed, 0)
+        end
+        flyBV.Velocity = vel
+        local flatLook = Vector3.new(look.X, 0, look.Z)
+        if flatLook.Magnitude > 0 then
+            flyBG.CFrame = CFrame.lookAt(root.Position, root.Position + flatLook)
+        end
+    end)
+end
+flyBtn.MouseButton1Click:Connect(function()
+    if flyOn then
+        stopFly()
+        showToast("✈️ Fly OFF", COL_RED)
+    else
+        startFly()
+        showToast("✈️ Fly ON", COL_GREEN)
+    end
+end)
+table.insert(cleanupFns, function() if flyOn then stopFly() end end)
+
+-- NOCLIP
+local noclipBtn = makeFarmButton("🚫 NOCLIP • OFF", 5)
+local noclipOn = false
+local noclipConn
+noclipBtn.MouseButton1Click:Connect(function()
+    noclipOn = not noclipOn
+    noclipBtn.Text = noclipOn and "🚫 NOCLIP • ON" or "🚫 NOCLIP • OFF"
+    noclipBtn.BackgroundColor3 = noclipOn and ON_COLOR or BG_BUTTON
+    showToast(noclipOn and "🚫 Noclip ON" or "🚫 Noclip OFF", noclipOn and COL_GREEN or COL_RED)
+    if noclipOn then
+        noclipConn = RunService.Stepped:Connect(function()
+            if character then
+                for _, part in ipairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end
+        end)
+    else
+        if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    end
+end)
+
+-- INF JUMP
+local infJumpBtn = makeFarmButton("🦘 INF JUMP • OFF", 6)
+local infJumpOn = false
+infJumpBtn.MouseButton1Click:Connect(function()
+    infJumpOn = not infJumpOn
+    infJumpBtn.Text = infJumpOn and "🦘 INF JUMP • ON" or "🦘 INF JUMP • OFF"
+    infJumpBtn.BackgroundColor3 = infJumpOn and ON_COLOR or BG_BUTTON
+    showToast(infJumpOn and "🦘 Inf Jump ON" or "🦘 Inf Jump OFF", infJumpOn and COL_GREEN or COL_RED)
+end)
+local jumpConn = UserInputService.JumpRequest:Connect(function()
+    if infJumpOn and not flyOn then
+        local hum = getHumanoid()
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)-- ESP
+local espBtn = makeFarmButton("👁️ ESP • OFF", 7)
+local espOn = false
+local espHighlights = {}
+local function removeESP(p)
+    if espHighlights[p] then espHighlights[p]:Destroy() espHighlights[p] = nil end
+end
+local function addESP(p)
+    if p == player or not p.Character then return end
+    removeESP(p)
+    local hl = Instance.new("Highlight")
+    hl.FillColor = Color3.fromRGB(255, 0, 0)
+    hl.OutlineColor = WHITE
+    hl.FillTransparency = 0.7
+    hl.Parent = p.Character
+    espHighlights[p] = hl
+end
+espBtn.MouseButton1Click:Connect(function()
+    espOn = not espOn
+    espBtn.Text = espOn and "👁️ ESP • ON" or "👁️ ESP • OFF"
+    espBtn.BackgroundColor3 = espOn and ON_COLOR or BG_BUTTON
+    showToast(espOn and "👁️ ESP ON" or "👁️ ESP OFF", espOn and COL_GREEN or COL_RED)
+    if espOn then
+        for _, p in ipairs(Players:GetPlayers()) do addESP(p) end
+    else
+        for p in pairs(espHighlights) do removeESP(p) end
+    end
+end)
+
+-- GODMODE
+local godBtn = makeFarmButton("🛡️ GODMODE • OFF", 8)
+local godOn = false
+local godConn
+local function hookGod()
+    if godConn then godConn:Disconnect() godConn = nil end
+    local hum = getHumanoid()
+    if not hum or not godOn then return end
+    hum.Health = hum.MaxHealth
+    godConn = hum.HealthChanged:Connect(function(hp)
+        if godOn and hp > 0 and hp < hum.MaxHealth then hum.Health = hum.MaxHealth end
+    end)
+end
+godBtn.MouseButton1Click:Connect(function()
+    godOn = not godOn
+    godBtn.Text = godOn and "🛡️ GODMODE • ON" or "🛡️ GODMODE • OFF"
+    godBtn.BackgroundColor3 = godOn and ON_COLOR or BG_BUTTON
+    hookGod()
+    showToast(godOn and "🛡️ God ON" or "🛡️ God OFF", godOn and COL_GREEN or COL_RED)
+end)
+
+-- INVISIBLE
+local invisBtn = makeFarmButton("👻 INVISIBLE • OFF", 9)
+local invisOn = false
+local invisOriginal = {}
+local invisConn
+local function setInvisible(obj)
+    if (obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart") or obj:IsA("Decal") then
+        if invisOriginal[obj] == nil then invisOriginal[obj] = obj.Transparency end
+        obj.Transparency = 1
+    end
+end
+local function applyInvisible()
+    if invisConn then invisConn:Disconnect() invisConn = nil end
+    for obj, t in pairs(invisOriginal) do
+        if obj and obj.Parent then obj.Transparency = t end
+    end
+    invisOriginal = {}
+    if not invisOn or not character then return end
+    for _, d in ipairs(character:GetDescendants()) do setInvisible(d) end
+    invisConn = character.DescendantAdded:Connect(function(d)
+        if invisOn then setInvisible(d) end
+    end)
+end
+invisBtn.MouseButton1Click:Connect(function()
+    invisOn = not invisOn
+    invisBtn.Text = invisOn and "👻 INVISIBLE • ON" or "👻 INVISIBLE • OFF"
+    invisBtn.BackgroundColor3 = invisOn and ON_COLOR or BG_BUTTON
+    applyInvisible()
+    showToast(invisOn and "👻 Invis ON" or "👻 Invis OFF", invisOn and COL_GREEN or COL_RED)
+end)
+
+-- WALK ON AIR
+local walkAirBtn = makeFarmButton("🌊 WALK ON AIR • OFF", 10)
+local walkAirOn = false
+local walkAirConn
+walkAirBtn.MouseButton1Click:Connect(function()
+    walkAirOn = not walkAirOn
+    walkAirBtn.Text = walkAirOn and "🌊 WALK ON AIR • ON" or "🌊 WALK ON AIR • OFF"
+    walkAirBtn.BackgroundColor3 = walkAirOn and ON_COLOR or BG_BUTTON
+    showToast(walkAirOn and "🌊 Walk Air ON" or "🌊 Walk Air OFF", walkAirOn and COL_GREEN or COL_RED)
+    if walkAirOn then
+        walkAirConn = RunService.Heartbeat:Connect(function()
+            local hrp = getHRP()
+            if hrp then
+                local v = hrp.AssemblyLinearVelocity
+                if v.Y < -1 then hrp.AssemblyLinearVelocity = Vector3.new(v.X, 0, v.Z) end
+            end
+        end)
+    else
+        if walkAirConn then walkAirConn:Disconnect() walkAirConn = nil end
+    end
+end)
+
+-- SERVER PAGE
+newLabel(serverPage, "🖥️ SERVER TOOLS", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+local antiLagBtn = makeButton(serverPage, "⚡ ANTI LAG • OFF", 1)
+local antiLagOn = false
+antiLagBtn.MouseButton1Click:Connect(function()
+    antiLagOn = not antiLagOn
+    antiLagBtn.Text = antiLagOn and "⚡ ANTI LAG • ON" or "⚡ ANTI LAG • OFF"
+    antiLagBtn.BackgroundColor3 = antiLagOn and ON_COLOR or BG_BUTTON
+    showToast(antiLagOn and "⚡ AntiLag ON" or "⚡ AntiLag OFF", antiLagOn and COL_GREEN or COL_RED)
+    if antiLagOn then
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                v.Enabled = false
+            end
+        end
+    end
+end)
+local antiAfkBtn = makeButton(serverPage, "💤 ANTI AFK • OFF", 2)
+local antiAfkOn = false
+antiAfkBtn.MouseButton1Click:Connect(function()
+    antiAfkOn = not antiAfkOn
+    antiAfkBtn.Text = antiAfkOn and "💤 ANTI AFK • ON" or "💤 ANTI AFK • OFF"
+    antiAfkBtn.BackgroundColor3 = antiAfkOn and ON_COLOR or BG_BUTTON
+    showToast(antiAfkOn and "💤 Anti AFK ON" or "💤 Anti AFK OFF", antiAfkOn and COL_GREEN or COL_RED)
+end)
+local afkConn = player.Idled:Connect(function()
+    if antiAfkOn then
+        local ok, vu = pcall(function() return game:GetService("VirtualUser") end)
+        if ok and vu then vu:CaptureController() vu:ClickButton2(Vector2.new()) end
+    end
+end)local STATUS_GREY = Color3.fromRGB(150, 160, 180)
+local TEAL = Color3.fromRGB(0, 150, 170)
+newLabel(serverPage, "🚀 SERVER HOP PANEL", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 3
+local maxFrame = Instance.new("Frame")
+maxFrame.LayoutOrder = 4
+maxFrame.Size = UDim2.new(1, 0, 0, 54)
+maxFrame.BackgroundColor3 = BG_DARK
+maxFrame.BorderSizePixel = 0
+maxFrame.Parent = serverPage
+corner(maxFrame, 8)
+newLabel(maxFrame, "👥 MAX PLAYERS (for Hop)", 10, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 4), UDim2.new(1, -16, 0, 18), Enum.TextXAlignment.Left)
+local maxInput = Instance.new("TextBox")
+maxInput.Size = UDim2.new(1, -16, 0, 24)
+maxInput.Position = UDim2.new(0, 8, 0, 24)
+maxInput.BackgroundColor3 = BG_BUTTON
+maxInput.Text = "5"
+maxInput.TextSize = 13
+maxInput.Font = Enum.Font.GothamBold
+maxInput.TextColor3 = WHITE
+maxInput.ClearTextOnFocus = false
+maxInput.Parent = maxFrame
+corner(maxInput, 6)
+maxInput.FocusLost:Connect(function()
+    local v = tonumber(maxInput.Text)
+    if v and v >= 1 then maxInput.Text = tostring(math.floor(v)) else maxInput.Text = "5" end
+end)
+local hopBtn = makeButton(serverPage, "🚀 HOP SERVER", 5)
+hopBtn.BackgroundColor3 = ACCENT_BLUE
+local rejoinBtn = makeButton(serverPage, "🔄 REJOIN SERVER", 6)
+local randomBtn = makeButton(serverPage, "🎲 RANDOM SERVER", 7)
+local statusLabel = newLabel(serverPage, "Status: Ready 💡", 10, Enum.Font.GothamBold, GREEN, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 16), Enum.TextXAlignment.Left)
+statusLabel.LayoutOrder = 8
+local function setStatus(text, color)
+    statusLabel.Text = "Status: " .. text
+    statusLabel.TextColor3 = color or GREEN
+end
+local function httpGet(url)
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    if ok and res then return res end
+    local req = (typeof(request) == "function" and request) or (typeof(http_request) == "function" and http_request) or (syn and syn.request)
+    if req then
+        local ok2, r = pcall(function() return req({Url = url, Method = "GET"}) end)
+        if ok2 and r and r.Body then return r.Body end
+    end
+    return nil
+end
+local function fetchServers()
+    local body = httpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100")
+    if not body then return nil end
+    local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+    if not ok or not data or not data.data then return nil end
+    local list = {}
+    for _, s in ipairs(data.data) do
+        if s.id ~= game.JobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers then
+            table.insert(list, {id = s.id, playing = s.playing, maxPlayers = s.maxPlayers})
+        end
+    end
+    return list
+end
+local function joinServer(id)
+    setStatus("Teleporting... 🚀", GREEN)
+    local ok = pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, id, player) end)
+    if not ok then setStatus("Teleport failed ❌", RED) end
+end
+local busy = false
+local function hopTo(mode)
+    if busy then return end
+    busy = true
+    setStatus("Searching... 🔎", STATUS_GREY)
+    local servers = fetchServers()
+    if not servers then setStatus("Gagal load ❌", RED) busy = false return end
+    local maxP = tonumber(maxInput.Text) or 5
+    local pool = {}
+    for _, s in ipairs(servers) do
+        if mode == "random" or s.playing <= maxP then table.insert(pool, s) end
+    end
+    if #pool == 0 then setStatus("No server ⚠️", Color3.fromRGB(255, 190, 70)) busy = false return end
+    local pick = pool[math.random(1, #pool)]
+    busy = false
+    joinServer(pick.id)
+end
+hopBtn.MouseButton1Click:Connect(function() hopTo("hop") end)
+randomBtn.MouseButton1Click:Connect(function() hopTo("random") end)
+rejoinBtn.MouseButton1Click:Connect(function() joinServer(game.JobId) end)
+
+local filterFrame = Instance.new("Frame")
+filterFrame.LayoutOrder = 9
+filterFrame.Size = UDim2.new(1, 0, 0, 50)
+filterFrame.BackgroundColor3 = BG_DARK
+filterFrame.BorderSizePixel = 0
+filterFrame.Parent = serverPage
+corner(filterFrame, 8)
+newLabel(filterFrame, "🔎 FILTER BY POPULATION", 10, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 3), UDim2.new(1, -16, 0, 16), Enum.TextXAlignment.Left)
+local filterRow = Instance.new("Frame")
+filterRow.Size = UDim2.new(1, -16, 0, 24)
+filterRow.Position = UDim2.new(0, 8, 0, 21)
+filterRow.BackgroundTransparency = 1
+filterRow.Parent = filterFrame
+local filterLayout = Instance.new("UIListLayout")
+filterLayout.FillDirection = Enum.FillDirection.Horizontal
+filterLayout.Padding = UDim.new(0, 4)
+filterLayout.Parent = filterRow
+local activeFilter = nil
+local filterButtons = {}
+local renderList
+local function makeFilterButton(key, text)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1/3, -3, 1, 0)
+    b.BackgroundColor3 = BG_BUTTON
+    b.Text = text
+    b.TextSize = 10
+    b.Font = Enum.Font.GothamBold
+    b.TextColor3 = WHITE
+    b.AutoButtonColor = false
+    b.Parent = filterRow
+    corner(b, 6)
+    filterButtons[key] = b
+    b.MouseButton1Click:Connect(function()
+        activeFilter = (activeFilter == key) and nil or key
+        for k, btn in pairs(filterButtons) do
+            btn.BackgroundColor3 = (k == activeFilter) and ACCENT_BLUE or BG_BUTTON
+        end
+        if renderList then renderList() end
+    end)
+end
+makeFilterButton("few", "🟢 Few")
+makeFilterButton("medium", "🟡 Medium")
+makeFilterButton("many", "🔴 Many")
+
+local refreshBtn = makeButton(serverPage, "⚡ REFRESH SERVER LIST", 10)
+refreshBtn.BackgroundColor3 = TEAL
+local listFrame = Instance.new("ScrollingFrame")
+listFrame.LayoutOrder = 11
+listFrame.Size = UDim2.new(1, 0, 0, 130)
+listFrame.BackgroundColor3 = BG_DARK
+listFrame.BorderSizePixel = 0
+listFrame.ScrollBarThickness = 3
+listFrame.ScrollBarImageColor3 = ACCENT_BLUE
+listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+listFrame.Parent = serverPage
+corner(listFrame, 8)
+local listPadding = Instance.new("UIPadding")
+listPadding.PaddingTop = UDim.new(0, 4)
+listPadding.PaddingBottom = UDim.new(0, 4)
+listPadding.PaddingLeft = UDim.new(0, 4)
+listPadding.PaddingRight = UDim.new(0, 4)
+listPadding.Parent = listFrame
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 4)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = listFrame
+local serverCache = {}
+local function matchesFilter(s)
+    if not activeFilter then return true end
+    local ratio = s.playing / s.maxPlayers
+    if activeFilter == "few" then return ratio <= 0.34 end
+    if activeFilter == "medium" then return ratio > 0.34 and ratio <= 0.67 end
+    return ratio > 0.67
+end
+renderList = function()
+    for _, c in ipairs(listFrame:GetChildren()) do
+        if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
+    end
+    local shown = 0
+    for i, s in ipairs(serverCache) do
+        if matchesFilter(s) then
+            shown = shown + 1
+            local row = Instance.new("TextButton")
+            row.LayoutOrder = i
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.BackgroundColor3 = BG_BUTTON
+            row.Text = ""
+            row.AutoButtonColor = false
+            row.Parent = listFrame
+            corner(row, 6)
+            newLabel(row, string.format("👥 %d/%d", s.playing, s.maxPlayers), 10, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 0), UDim2.new(0.65, 0, 1, 0), Enum.TextXAlignment.Left)
+            newLabel(row, "JOIN ▶", 9, Enum.Font.GothamBold, GREEN, UDim2.new(0.65, 0, 0, 0), UDim2.new(0.35, -8, 1, 0), Enum.TextXAlignment.Right)
+            row.MouseButton1Click:Connect(function() joinServer(s.id) end)
+        end
+    end
+    if shown == 0 then
+        local empty = newLabel(listFrame, #serverCache == 0 and "Tap refresh to load" or "No server match", 10, Enum.Font.Gotham, GREY, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 28))
+        empty.LayoutOrder = 1
+    end
+end
+refreshBtn.MouseButton1Click:Connect(function()
+    if busy then return end
+    busy = true
+    refreshBtn.Text = "⏳ Loading..."
+    setStatus("Loading... 🔎", STATUS_GREY)
+    local servers = fetchServers()
+    busy = false
+    refreshBtn.Text = "⚡ REFRESH SERVER LIST"
+    if not servers then setStatus("Gagal load ❌", RED) return end
+    serverCache = servers
+    renderList()
+    setStatus("Found " .. #servers .. " servers ✅", GREEN)
+end)
+renderList()
+
+-- THEME
+local themeBtn = makeButton(serverPage, "🌙 THEME • DARK", -3)
+local themeDark = true
+local themeOrig = {}
+themeBtn.MouseButton1Click:Connect(function()
+    themeDark = not themeDark
+    themeBtn.Text = themeDark and "🌙 THEME • DARK" or "☀️ THEME • LIGHT"
+    showToast(themeDark and "🌙 Dark" or "☀️ Light", themeDark and ACCENT_BLUE or Color3.fromRGB(255, 190, 70))
+    for _, obj in ipairs(mainFrame:GetDescendants()) do
+        if obj:IsA("Frame") or obj:IsA("TextButton") or obj:IsA("TextBox") or obj:IsA("ScrollingFrame") or obj:IsA("TextLabel") then
+            if themeOrig[obj] == nil then themeOrig[obj] = {bg = obj.BackgroundColor3, txt = obj.TextColor3} end
+            local o = themeOrig[obj]
+            if themeDark then
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then obj.TextColor3 = o.txt else obj.BackgroundColor3 = o.bg end
+            else
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                    if obj.TextColor3 == WHITE then obj.TextColor3 = Color3.fromRGB(30, 35, 50) end
+                else
+                    local bg = obj.BackgroundColor3
+                    if bg.R < 0.3 and bg.G < 0.3 and bg.B < 0.3 then obj.BackgroundColor3 = Color3.fromRGB(235, 238, 245) end
+                end
+            end
+        end
+    end
+end)
+
+-- VERIFIED
+local adminOn = false
+local adminGui
+local function removeAdminBadge()
+    if adminGui then adminGui:Destroy() adminGui = nil end
+end
+local function applyAdminBadge()
+    removeAdminBadge()
+    if not adminOn or not character then return end
+    local head = character:FindFirstChild("Head")
+    if not head then return end
+    local gui = Instance.new("BillboardGui")
+    gui.Adornee = head
+    gui.Size = UDim2.new(0, 220, 0, 40)
+    gui.StudsOffset = Vector3.new(0, 2.6, 0)
+    gui.AlwaysOnTop = true
+    gui.Parent = screenGui
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 22)
+    row.BackgroundTransparency = 1
+    row.Parent = gui
+    local list = Instance.new("UIListLayout")
+    list.FillDirection = Enum.FillDirection.Horizontal
+    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    list.Padding = UDim.new(0, 5)
+    list.Parent = row
+    local nL = Instance.new("TextLabel")
+    nL.AutomaticSize = Enum.AutomaticSize.X
+    nL.Size = UDim2.new(0, 0, 1, 0)
+    nL.BackgroundTransparency = 1
+    nL.Text = player.DisplayName
+    nL.TextColor3 = WHITE
+    nL.TextSize = 16
+    nL.Font = Enum.Font.GothamBold
+    nL.TextStrokeTransparency = 0.4
+    nL.Parent = row
+    local ch = Instance.new("ImageLabel")
+    ch.Size = UDim2.new(0, 18, 0, 18)
+    ch.BackgroundTransparency = 1
+    ch.Image = "rbxassetid://6031075931"
+    ch.ImageColor3 = VERIFIED_BLUE
+    ch.ScaleType = Enum.ScaleType.Fit
+    ch.Parent = row
+    local rL = Instance.new("TextLabel")
+    rL.Size = UDim2.new(1, 0, 0, 14)
+    rL.Position = UDim2.new(0, 0, 0, 24)
+    rL.BackgroundTransparency = 1
+    rL.Text = "@" .. player.Name
+    rL.TextColor3 = Color3.fromRGB(190, 205, 225)
+    rL.TextSize = 11
+    rL.Font = Enum.Font.GothamBold
+    rL.Parent = gui
+    adminGui = gui
+end
+newLabel(serverPage, "✔ VERIFIED BUNDLE", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = -2
+local adminBtn = makeButton(serverPage, "✔ VERIFIED • OFF", -1)
+adminBtn.MouseButton1Click:Connect(function()
+    adminOn = not adminOn
+    adminBtn.Text = adminOn and "✔ VERIFIED • ON" or "✔ VERIFIED • OFF"
+    adminBtn.BackgroundColor3 = adminOn and ON_COLOR or BG_BUTTON
+    applyAdminBadge()
+    showToast(adminOn and "✔ Verified ON" or "✔ Verified OFF", adminOn and COL_GREEN or COL_RED)
+end)local function makePlayerButton(text, order) return makeButton(playerPage, text, order) end
+newLabel(playerPage, "👤 PLAYER TOOLS", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+local resetBtn = makePlayerButton("💀 RESET CHARACTER", 1)
+resetBtn.MouseButton1Click:Connect(function()
+    local hum = getHumanoid()
+    if hum then hum.Health = 0 end
+    showToast("💀 Reset", COL_RED)
+end)
+local selectedPlayer = nil
+local selectPlayerBtn = makePlayerButton("🎯 SELECT PLAYER", 2)
+local selectPlayerFrame = Instance.new("Frame")
+selectPlayerFrame.LayoutOrder = 3
+selectPlayerFrame.Size = UDim2.new(1, 0, 0, 120)
+selectPlayerFrame.BackgroundColor3 = BG_DARK
+selectPlayerFrame.Visible = false
+selectPlayerFrame.Parent = playerPage
+corner(selectPlayerFrame, 8)
+local spScroll = Instance.new("ScrollingFrame")
+spScroll.Size = UDim2.new(1, -8, 1, -8)
+spScroll.Position = UDim2.new(0, 4, 0, 4)
+spScroll.BackgroundTransparency = 1
+spScroll.ScrollBarThickness = 3
+spScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+spScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+spScroll.Parent = selectPlayerFrame
+local spLayout = Instance.new("UIListLayout")
+spLayout.Padding = UDim.new(0, 3)
+spLayout.Parent = spScroll
+local function refreshSelectList()
+    for _, c in ipairs(spScroll:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local row = Instance.new("TextButton")
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.BackgroundColor3 = (selectedPlayer == p) and ON_COLOR or BG_BUTTON
+            row.Text = p.DisplayName
+            row.TextSize = 10
+            row.Font = Enum.Font.GothamBold
+            row.TextColor3 = WHITE
+            row.AutoButtonColor = false
+            row.Parent = spScroll
+            corner(row, 6)
+            row.MouseButton1Click:Connect(function()
+                selectedPlayer = (selectedPlayer == p) and nil or p
+                refreshSelectList()
+            end)
+        end
+    end
+end
+selectPlayerBtn.MouseButton1Click:Connect(function()
+    selectPlayerFrame.Visible = not selectPlayerFrame.Visible
+    if selectPlayerFrame.Visible then refreshSelectList() end
+end)
+local tpPlayerBtn = makePlayerButton("🚀 TELEPORT PLAYER", 4)
+tpPlayerBtn.MouseButton1Click:Connect(function()
+    if not selectedPlayer then showToast("⚠️ Pilih player", Color3.fromRGB(255, 190, 70)) return end
+    local tHrp = selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local myHrp = getHRP()
+    if tHrp and myHrp then
+        myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3)
+        showToast("🚀 TP ke @" .. selectedPlayer.Name, COL_GREEN)
+    end
+end)
+
+-- COPY AVATAR
+local copyTarget = nil
+local selectCopyBtn = makePlayerButton("🎭 SELECT COPY", 5)
+local selectCopyFrame = Instance.new("Frame")
+selectCopyFrame.LayoutOrder = 6
+selectCopyFrame.Size = UDim2.new(1, 0, 0, 120)
+selectCopyFrame.BackgroundColor3 = BG_DARK
+selectCopyFrame.Visible = false
+selectCopyFrame.Parent = playerPage
+corner(selectCopyFrame, 8)
+local scScroll = Instance.new("ScrollingFrame")
+scScroll.Size = UDim2.new(1, -8, 1, -8)
+scScroll.Position = UDim2.new(0, 4, 0, 4)
+scScroll.BackgroundTransparency = 1
+scScroll.ScrollBarThickness = 3
+scScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scScroll.Parent = selectCopyFrame
+local scLayout = Instance.new("UIListLayout")
+scLayout.Padding = UDim.new(0, 3)
+scLayout.Parent = scScroll
+local function refreshCopyList()
+    for _, c in ipairs(scScroll:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local row = Instance.new("TextButton")
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.BackgroundColor3 = (copyTarget == p) and ON_COLOR or BG_BUTTON
+            row.Text = p.DisplayName .. " (@" .. p.Name .. ")"
+            row.TextSize = 9
+            row.Font = Enum.Font.GothamBold
+            row.TextColor3 = WHITE
+            row.AutoButtonColor = false
+            row.Parent = scScroll
+            corner(row, 6)
+            row.MouseButton1Click:Connect(function()
+                copyTarget = (copyTarget == p) and nil or p
+                refreshCopyList()
+            end)
+        end
+    end
+end
+selectCopyBtn.MouseButton1Click:Connect(function()
+    selectCopyFrame.Visible = not selectCopyFrame.Visible
+    if selectCopyFrame.Visible then refreshCopyList() end
+end)
+local copyAvaBtn = makePlayerButton("🎭 COPY AVATAR", 7)
+copyAvaBtn.MouseButton1Click:Connect(function()
+    if not copyTarget then
+        showToast("⚠️ Pilih target dulu", Color3.fromRGB(255, 190, 70))
+        return
+    end
+    local targetUserId = copyTarget.UserId
+    local hum = getHumanoid()
+    if not hum then
+        showToast("⚠️ Karakter belum spawn", COL_RED)
+        return
+    end
+    showToast("🎭 Copying @" .. copyTarget.Name .. "...", COL_BLUE)
+    task.spawn(function()
+        local ok, desc = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserId(targetUserId)
+        end)
+        if not ok or not desc then
+            showToast("❌ Gagal ambil description", COL_RED)
+            return
+        end
+        local applyOk = pcall(function() hum:ApplyDescriptionClientServer(desc) end)
+        if not applyOk then
+            pcall(function() hum:ApplyDescription(desc) end)
+        end
+        local animOk, animModel = pcall(function()
+            return Players:CreateHumanoidModelFromUserId(targetUserId)
+        end)
+        if animOk and animModel then
+            local targetAnim = animModel:FindFirstChild("Animate")
+            if targetAnim then
+                local myAnim = character and character:FindFirstChild("Animate")
+                if myAnim then myAnim:Destroy() end
+                local newAnim = targetAnim:Clone()
+                newAnim.Parent = character
+                task.wait(0.3)
+                pcall(function()
+                    newAnim.Enabled = false
+                    task.wait(0.1)
+                    newAnim.Enabled = true
+                end)
+            end
+            pcall(function() animModel:Destroy() end)
+        end
+        showToast("✅ Avatar + animation copied!", COL_GREEN)
+    end)
+end)
+local restoreAvaBtn = makePlayerButton("♻️ RESTORE AVATAR", 8)
+restoreAvaBtn.MouseButton1Click:Connect(function()
+    local hum = getHumanoid()
+    if hum then hum.Health = 0 end
+    showToast("♻️ Respawning dengan avatar sendiri...", COL_BLUE)
+end)
+local followBtn = makePlayerButton("🎯 FOLLOW • OFF", 9)
+local followOn = false
+local followConn
+followBtn.MouseButton1Click:Connect(function()
+    if not selectedPlayer then showToast("⚠️ Pilih player", Color3.fromRGB(255, 190, 70)) return end
+    followOn = not followOn
+    followBtn.Text = followOn and "🎯 FOLLOW • ON" or "🎯 FOLLOW • OFF"
+    followBtn.BackgroundColor3 = followOn and ON_COLOR or BG_BUTTON
+    showToast(followOn and ("🎯 Following @" .. selectedPlayer.Name) or "🎯 Follow OFF", followOn and COL_GREEN or COL_RED)
+    if followOn then
+        followConn = RunService.Heartbeat:Connect(function()
+            if not followOn or not selectedPlayer then return end
+            local tHrp = selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local myHrp = getHRP()
+            if tHrp and myHrp then
+                myHrp.CFrame = myHrp.CFrame:Lerp(tHrp.CFrame * CFrame.new(0, 0, 3), 0.15)
+            end
+        end)
+    else
+        if followConn then followConn:Disconnect() followConn = nil end
+    end
+end)
+local hideAllBtn = makePlayerButton("🚫 HIDE ALL • OFF", 10)
+local hideAllOn = false
+local hideAllConn
+local hiddenOrig = {}
+local function hideChar(char)
+    if not char or char == character then return end
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("BasePart") or d:IsA("Decal") then
+            if hiddenOrig[d] == nil then hiddenOrig[d] = d.Transparency end
+            d.Transparency = 1
+        end
+    end
+end
+local function restoreAll()
+    for o, t in pairs(hiddenOrig) do if o and o.Parent then o.Transparency = t end end
+    hiddenOrig = {}
+end
+hideAllBtn.MouseButton1Click:Connect(function()
+    hideAllOn = not hideAllOn
+    hideAllBtn.Text = hideAllOn and "🚫 HIDE ALL • ON" or "🚫 HIDE ALL • OFF"
+    hideAllBtn.BackgroundColor3 = hideAllOn and ON_COLOR or BG_BUTTON
+    showToast(hideAllOn and "🚫 Hidden" or "🚫 Visible", hideAllOn and COL_GREEN or COL_RED)
+    if hideAllOn then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player then hideChar(p.Character) end
+        end
+        hideAllConn = workspace.DescendantAdded:Connect(function(d)
+            if not hideAllOn then return end
+            local m = d:FindFirstAncestorOfClass("Model")
+            if m and Players:GetPlayerFromCharacter(m) and m ~= character then
+                task.wait(0.1)
+                hideChar(m)
+            end
+        end)
+    else
+        if hideAllConn then hideAllConn:Disconnect() hideAllConn = nil end
+        restoreAll()
+    end
+end)newLabel(teleportPage, "📍 TELEPORT SLOTS", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+local tpSlots = {}
+for i = 1, 10 do
+    local row = Instance.new("Frame")
+    row.LayoutOrder = i
+    row.Size = UDim2.new(1, 0, 0, 32)
+    row.BackgroundColor3 = BG_DARK
+    row.Parent = teleportPage
+    corner(row, 6)
+    newLabel(row, "SLOT " .. i, 10, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 0), UDim2.new(1, -120, 1, 0), Enum.TextXAlignment.Left)
+    local saveB = Instance.new("TextButton")
+    saveB.Size = UDim2.new(0, 50, 0, 24)
+    saveB.Position = UDim2.new(1, -110, 0.5, -12)
+    saveB.BackgroundColor3 = BG_BUTTON
+    saveB.Text = "💾"
+    saveB.TextSize = 12
+    saveB.Font = Enum.Font.GothamBold
+    saveB.TextColor3 = WHITE
+    saveB.Parent = row
+    corner(saveB, 5)
+    local goB = Instance.new("TextButton")
+    goB.Size = UDim2.new(0, 50, 0, 24)
+    goB.Position = UDim2.new(1, -56, 0.5, -12)
+    goB.BackgroundColor3 = BG_BUTTON
+    goB.Text = "🚀"
+    goB.TextSize = 12
+    goB.Font = Enum.Font.GothamBold
+    goB.TextColor3 = WHITE
+    goB.Parent = row
+    corner(goB, 5)
+    saveB.MouseButton1Click:Connect(function()
+        local hrp = getHRP()
+        if hrp then tpSlots[i] = hrp.CFrame saveB.Text = "✅" task.delay(1, function() saveB.Text = "💾" end) end
+    end)
+    goB.MouseButton1Click:Connect(function()
+        local hrp = getHRP()
+        if hrp and tpSlots[i] then hrp.CFrame = tpSlots[i] goB.Text = "✅" task.delay(1, function() goB.Text = "🚀" end) end
+    end)
+end
+
+-- USER PROFILE DENGAN AVATAR
+local userBox = Instance.new("Frame")
+userBox.Size = UDim2.new(1, -16, 0, 38)
+userBox.Position = UDim2.new(0, 8, 1, -44)
+userBox.BackgroundColor3 = BG_DARK
+userBox.BorderSizePixel = 0
+userBox.Parent = mainFrame
+corner(userBox, 8)
+stroke(userBox, BORDER_BLUE, 1)
+local userAvatarFrame = Instance.new("Frame")
+userAvatarFrame.Size = UDim2.new(0, 28, 0, 28)
+userAvatarFrame.Position = UDim2.new(0, 6, 0.5, -14)
+userAvatarFrame.BackgroundColor3 = BG_BLACK
+userAvatarFrame.Parent = userBox
+corner(userAvatarFrame, 14)
+stroke(userAvatarFrame, ACCENT_BLUE, 1)
+local userAvatarImg = Instance.new("ImageLabel")
+userAvatarImg.Size = UDim2.new(1, -4, 1, -4)
+userAvatarImg.Position = UDim2.new(0, 2, 0, 2)
+userAvatarImg.BackgroundTransparency = 1
+userAvatarImg.ScaleType = Enum.ScaleType.Crop
+userAvatarImg.Parent = userAvatarFrame
+corner(userAvatarImg, 12)
+task.spawn(function()
+    local ok, thumb = pcall(function()
+        return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+    end)
+    if ok then userAvatarImg.Image = thumb end
+end)
+newLabel(userBox, player.DisplayName, 10, Enum.Font.GothamBold, WHITE, UDim2.new(0, 40, 0, 3), UDim2.new(1, -46, 0, 16), Enum.TextXAlignment.Left).TextTruncate = Enum.TextTruncate.AtEnd
+newLabel(userBox, "@" .. player.Name, 8, Enum.Font.Gotham, GREY, UDim2.new(0, 40, 0, 19), UDim2.new(1, -46, 0, 14), Enum.TextXAlignment.Left).TextTruncate = Enum.TextTruncate.AtEnd
+
+-- RESPAWN
+player.CharacterAdded:Connect(function(c)
+    character = c
+    flyOn = false
+    if flyBV then flyBV:Destroy() flyBV = nil end
+    if flyBG then flyBG:Destroy() flyBG = nil end
+    flyBtn.Text = "✈️ FLY • OFF"
+    flyBtn.BackgroundColor3 = BG_BUTTON
+    flyControlFrame.Visible = false
+    c:WaitForChild("Humanoid")
+    if speedOn then applySpeed() end
+    hookGod()
+    applyInvisible()
+    applyAdminBadge()
+end)local dragging, dragStart, startPos = false, nil, nil
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true dragStart = input.Position startPos = mainFrame.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local d = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+    end
+end)
+
+-- LOGO
+local logoBtn = Instance.new("TextButton")
+logoBtn.Size = UDim2.new(0, 44, 0, 44)
+logoBtn.Position = UDim2.new(0, 15, 0.5, -22)
+logoBtn.BackgroundColor3 = BG_BLACK
+logoBtn.Text = "$"
+logoBtn.TextSize = 18
+logoBtn.Font = Enum.Font.GothamMedium
+logoBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+logoBtn.Parent = screenGui
+corner(logoBtn, 22)
+stroke(logoBtn, Color3.fromRGB(255, 215, 0), 1.5)
+local logoDragging, logoMoved = false, false
+local logoStart, logoStartPos
+logoBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        logoDragging = true logoMoved = false logoStart = input.Position logoStartPos = logoBtn.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then logoDragging = false end end)
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if not logoDragging then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    local d = input.Position - logoStart
+    if not logoMoved and d.Magnitude < 8 then return end
+    logoMoved = true
+    logoBtn.Position = UDim2.new(logoStartPos.X.Scale, logoStartPos.X.Offset + d.X, logoStartPos.Y.Scale, logoStartPos.Y.Offset + d.Y)
+end)
+logoBtn.MouseButton1Click:Connect(function()
+    if logoMoved then logoMoved = false return end
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+-- SOFTEN UI
+local function softenUI(o)
+    if o == bgImage then return end
+    if (o:IsA("Frame") or o:IsA("TextButton") or o:IsA("TextBox") or o:IsA("ScrollingFrame"))
+        and o.BackgroundTransparency == 0
+        and o ~= mainFrame
+        and o ~= topBar then
+        o.BackgroundTransparency = 0.5
+    end
+end
+for _, o in ipairs(mainFrame:GetDescendants()) do softenUI(o) end
+mainFrame.DescendantAdded:Connect(softenUI)
+
+print("✅ UNIVERSAL v15.1 FULL Loaded!")
+end, function(e)
+    return tostring(e)
+end)
+
+if __ok then
+    pcall(function()
+        StarterGuiSvc:SetCore("SendNotification", {
+            Title = "UNIVERSAL v15.1",
+            Text = "Loaded ✔ Full features!",
+            Duration = 4,
+        })
+    end)
+else
+    warn("UNIVERSAL Error: " .. tostring(__err))
+end
