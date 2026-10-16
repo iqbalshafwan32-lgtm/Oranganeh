@@ -1,0 +1,939 @@
+local __ok, __err = xpcall(function()
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
+local TextChatService = game:GetService("TextChatService")
+local StarterGuiSvc = game:GetService("StarterGui")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local function showToast(text, color)
+    color = color or Color3.fromRGB(70, 130, 255)
+    local toast = Instance.new("Frame")
+    toast.Size = UDim2.new(0, 260, 0, 44)
+    toast.Position = UDim2.new(0.5, -130, 0, -60)
+    toast.BackgroundColor3 = Color3.fromRGB(18, 22, 35)
+    toast.BackgroundTransparency = 0.1
+    toast.BorderSizePixel = 0
+    toast.ZIndex = 9999
+    toast.Parent = player.PlayerGui
+    local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, 10) c.Parent = toast
+    local s = Instance.new("UIStroke") s.Color = color s.Thickness = 2 s.Parent = toast
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -20, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = WHITE
+    lbl.TextSize = 12
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextWrapped = true
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 10000
+    lbl.Parent = toast
+    TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -130, 0, 20)
+    }):Play()
+    task.delay(3, function()
+        if not toast or not toast.Parent then return end
+        local out = TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, -130, 0, -60)
+        })
+        out:Play()
+        out.Completed:Connect(function() if toast then toast:Destroy() end end)
+    end)
+endlocal BG_BLACK = Color3.fromRGB(10, 10, 15)
+local BG_DARK = Color3.fromRGB(18, 22, 35)
+local BG_BUTTON = Color3.fromRGB(25, 32, 50)
+local BORDER_BLUE = Color3.fromRGB(60, 120, 255)
+local ACCENT_BLUE = Color3.fromRGB(70, 130, 255)
+local WHITE = Color3.fromRGB(255, 255, 255)
+local GREY = Color3.fromRGB(150, 160, 180)
+local GREEN = Color3.fromRGB(80, 220, 120)
+local RED = Color3.fromRGB(255, 80, 80)
+local ON_COLOR = Color3.fromRGB(40, 80, 40)
+local VERIFIED_BLUE = Color3.fromRGB(29, 161, 242)
+local function corner(o, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = o
+end
+local function stroke(o, color, t)
+    local s = Instance.new("UIStroke")
+    s.Color = color or BORDER_BLUE
+    s.Thickness = t or 2
+    s.Parent = o
+    return s
+end
+local function newLabel(parent, text, size, font, color, pos, sz, align)
+    local l = Instance.new("TextLabel")
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextSize = size
+    l.Font = font
+    l.TextColor3 = color
+    l.Position = pos
+    l.Size = sz
+    l.TextXAlignment = align or Enum.TextXAlignment.Center
+    l.TextYAlignment = Enum.TextYAlignment.Center
+    l.Parent = parent
+    return l
+end
+local function getHumanoid()
+    return character and character:FindFirstChildOfClass("Humanoid")
+end
+local function getHRP()
+    return character and character:FindFirstChild("HumanoidRootPart")
+end
+local old = player:WaitForChild("PlayerGui"):FindFirstChild("AllMapHubGui")
+if old then old:Destroy() end
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AllMapHubGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player.PlayerGui
+
+-- INFO BAR DI LUAR UI
+local infoBar = Instance.new("Frame")
+infoBar.Size = UDim2.new(0, 340, 0, 24)
+infoBar.Position = UDim2.new(0.5, -170, 0, 8)
+infoBar.BackgroundColor3 = Color3.fromRGB(12, 15, 25)
+infoBar.BackgroundTransparency = 0.15
+infoBar.BorderSizePixel = 0
+infoBar.ZIndex = 5000
+infoBar.Parent = screenGui
+corner(infoBar, 12)
+stroke(infoBar, ACCENT_BLUE, 1.5)
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, -16, 1, 0)
+infoLabel.Position = UDim2.new(0, 8, 0, 0)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "📊 Tap info panel"
+infoLabel.TextColor3 = GREY
+infoLabel.TextSize = 11
+infoLabel.Font = Enum.Font.GothamBold
+infoLabel.ZIndex = 5001
+infoLabel.Parent = infoBar
+local infoBtn = Instance.new("TextButton")
+infoBtn.Size = UDim2.new(1, 0, 1, 0)
+infoBtn.BackgroundTransparency = 1
+infoBtn.Text = ""
+infoBtn.ZIndex = 5002
+infoBtn.Parent = infoBarlocal infoOn = false
+local fpsCount = 0
+local fpsTimer = 0
+local currentFPS = 0
+local pingValue = 0
+local infoConn
+local fpsConn = RunService.RenderStepped:Connect(function(dt)
+    fpsCount = fpsCount + 1
+    fpsTimer = fpsTimer + dt
+    if fpsTimer >= 1 then
+        currentFPS = fpsCount
+        fpsCount = 0
+        fpsTimer = 0
+    end
+end)
+local pingConn = RunService.Heartbeat:Connect(function()
+    pcall(function()
+        pingValue = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+    end)
+end)
+infoBtn.MouseButton1Click:Connect(function()
+    infoOn = not infoOn
+    showToast(infoOn and "📊 Info ON + Low Graphics" or "📊 Info OFF",
+        infoOn and GREEN or RED)
+    if infoOn then
+        pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+        if infoConn then infoConn:Disconnect() end
+        infoConn = RunService.RenderStepped:Connect(function()
+            if not infoOn then return end
+            local mem = math.floor(Stats:GetTotalMemoryUsageMb())
+            local players = #Players:GetPlayers()
+            infoLabel.Text = string.format("📊 FPS:%d | 📶%dms | 👥%d | 💾%dMB",
+                currentFPS, pingValue, players, mem)
+            infoLabel.TextColor3 = GREEN
+        end)
+    else
+        if infoConn then infoConn:Disconnect() infoConn = nil end
+        pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic end)
+        infoLabel.Text = "📊 Tap info panel"
+        infoLabel.TextColor3 = GREY
+    end
+end)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.Size = UDim2.new(0, 265, 0, 375)
+mainFrame.BackgroundColor3 = BG_BLACK
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+corner(mainFrame, 14)
+stroke(mainFrame, BORDER_BLUE, 2)
+
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 50)
+topBar.BackgroundColor3 = BG_BLACK
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+corner(topBar, 14)
+newLabel(topBar, "🌐 UNIVERSAL", 14, Enum.Font.GothamBlack, WHITE, UDim2.new(0, 10, 0, 8), UDim2.new(1, -80, 0, 20), Enum.TextXAlignment.Left)
+newLabel(topBar, "Player Hub v15.1", 9, Enum.Font.Gotham, GREY, UDim2.new(0, 10, 0, 28), UDim2.new(1, -80, 0, 12), Enum.TextXAlignment.Left)
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 26, 0, 26)
+minBtn.Position = UDim2.new(1, -60, 0, 10)
+minBtn.BackgroundColor3 = BG_BUTTON
+minBtn.Text = "−"
+minBtn.TextSize = 14
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextColor3 = WHITE
+minBtn.AutoButtonColor = false
+minBtn.Parent = topBar
+corner(minBtn, 6)
+minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
+local cleanupFns = {}
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -30, 0, 10)
+closeBtn.BackgroundColor3 = Color3.fromRGB(80, 30, 40)
+closeBtn.Text = "X"
+closeBtn.TextSize = 12
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextColor3 = RED
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = topBar
+corner(closeBtn, 6)
+closeBtn.MouseButton1Click:Connect(function()
+    for _, fn in ipairs(cleanupFns) do pcall(fn) end
+    screenGui:Destroy()
+end)
+
+local tabContainer = Instance.new("Frame")
+tabContainer.Size = UDim2.new(1, -16, 0, 28)
+tabContainer.Position = UDim2.new(0, 8, 0, 54)
+tabContainer.BackgroundColor3 = BG_DARK
+tabContainer.BorderSizePixel = 0
+tabContainer.Parent = mainFrame
+corner(tabContainer, 8)
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 3)
+tabLayout.Parent = tabContainerlocal pages = {}
+local tabButtons = {}
+local function makePage(name)
+    local page = Instance.new("ScrollingFrame")
+    page.Size = UDim2.new(1, -16, 1, -140)
+    page.Position = UDim2.new(0, 8, 0, 88)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.ScrollBarThickness = 3
+    page.ScrollBarImageColor3 = ACCENT_BLUE
+    page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    page.Parent = mainFrame
+    local padding = Instance.new("UIPadding")
+    padding.PaddingBottom = UDim.new(0, 8)
+    padding.Parent = page
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = page
+    pages[name] = page
+    return page
+end
+local farmPage = makePage("FARM")
+local serverPage = makePage("SERVER")
+local playerPage = makePage("PLAYER")
+local teleportPage = makePage("TELEPORT")
+local function makeTabButton(name, icon, text)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.25, -3, 1, 0)
+    btn.BackgroundColor3 = BG_BUTTON
+    btn.Text = icon .. " " .. text
+    btn.TextSize = 9
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = GREY
+    btn.AutoButtonColor = false
+    btn.Parent = tabContainer
+    corner(btn, 6)
+    btn.TextScaled = true
+    local lim = Instance.new("UITextSizeConstraint")
+    lim.MaxTextSize = 9
+    lim.Parent = btn
+    tabButtons[name] = btn
+    btn.MouseButton1Click:Connect(function()
+        for n, b in pairs(tabButtons) do
+            if n == name then
+                b.BackgroundColor3 = ACCENT_BLUE
+                b.TextColor3 = WHITE
+                pages[n].Visible = true
+            else
+                b.BackgroundColor3 = BG_BUTTON
+                b.TextColor3 = GREY
+                pages[n].Visible = false
+            end
+        end
+    end)
+end
+makeTabButton("FARM", "🌾", "FARM")
+makeTabButton("SERVER", "🖥️", "SERVER")
+makeTabButton("PLAYER", "👤", "PLAYER")
+makeTabButton("TELEPORT", "📍", "TELEPORT")
+tabButtons["FARM"].BackgroundColor3 = ACCENT_BLUE
+tabButtons["FARM"].TextColor3 = WHITE
+pages["FARM"].Visible = true
+
+local function makeButton(parent, text, order)
+    local btn = Instance.new("TextButton")
+    btn.LayoutOrder = order
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.BackgroundColor3 = BG_BUTTON
+    btn.Text = text
+    btn.TextSize = 11
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = WHITE
+    btn.AutoButtonColor = false
+    btn.Parent = parent
+    corner(btn, 8)
+    return btn
+end
+local function makeFarmButton(text, order)
+    return makeButton(farmPage, text, order)
+end
+newLabel(farmPage, " FARM / MOVEMENT", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+local speedBtn = makeFarmButton("🏃 SPEED • OFF", 1)
+local speedOn = false
+local speedValue = 100
+local function applySpeed()
+    local hum = getHumanoid()
+    if hum then hum.WalkSpeed = speedOn and speedValue or 16 end
+end
+speedBtn.MouseButton1Click:Connect(function()
+    speedOn = not speedOn
+    speedBtn.Text = speedOn and "🏃 SPEED • ON" or "🏃 SPEED • OFF"
+    speedBtn.BackgroundColor3 = speedOn and ON_COLOR or BG_BUTTON
+    applySpeed()
+    showToast(speedOn and ("🏃 Speed " .. speedValue) or "🏃 Speed OFF", speedOn and GREEN or RED)
+end)
+local flyBtn = makeFarmButton("✈️ FLY • OFF", 2)
+local flyOn = false
+local flyBV, flyBG, flyConn
+flyBtn.MouseButton1Click:Connect(function()
+    local hrp, hum = getHRP(), getHumanoid()
+    if not hrp or not hum then return end
+    if flyOn then
+        flyOn = false
+        if flyConn then flyConn:Disconnect() flyConn = nil end
+        if flyBV then flyBV:Destroy() flyBV = nil end
+        if flyBG then flyBG:Destroy() flyBG = nil end
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+    else
+        flyOn = true
+        flyBV = Instance.new("BodyVelocity")
+        flyBV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+        flyBV.Parent = hrp
+        flyBG = Instance.new("BodyGyro")
+        flyBG.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+        flyBG.P = 9000
+        flyBG.CFrame = hrp.CFrame
+        flyBG.Parent = hrp
+        hum.PlatformStand = true
+        flyConn = RunService.RenderStepped:Connect(function()
+            if not flyOn then return end
+            local root, h = getHRP(), getHumanoid()
+            if not root or not h then return end
+            local cam = workspace.CurrentCamera
+            local spd = 70
+            local look = cam.CFrame.LookVector
+            local vel = h.MoveDirection * spd
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vel = vel + Vector3.new(0, spd, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vel = vel - Vector3.new(0, spd, 0) end
+            flyBV.Velocity = vel
+            local flat = Vector3.new(look.X, 0, look.Z)
+            if flat.Magnitude > 0 then flyBG.CFrame = CFrame.lookAt(root.Position, root.Position + flat) end
+        end)
+    end
+    flyBtn.Text = flyOn and "✈️ FLY • ON" or "✈️ FLY • OFF"
+    flyBtn.BackgroundColor3 = flyOn and ON_COLOR or BG_BUTTON
+    showToast(flyOn and "✈️ Fly ON" or "✈️ Fly OFF", flyOn and GREEN or RED)
+end)
+local noclipBtn = makeFarmButton("🚫 NOCLIP • OFF", 3)
+local noclipOn = false
+local noclipConn
+noclipBtn.MouseButton1Click:Connect(function()
+    noclipOn = not noclipOn
+    noclipBtn.Text = noclipOn and "🚫 NOCLIP • ON" or "🚫 NOCLIP • OFF"
+    noclipBtn.BackgroundColor3 = noclipOn and ON_COLOR or BG_BUTTON
+    showToast(noclipOn and "🚫 Noclip ON" or "🚫 Noclip OFF", noclipOn and GREEN or RED)
+    if noclipOn then
+        noclipConn = RunService.Stepped:Connect(function()
+            if character then
+                for _, part in ipairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end
+        end)
+    else
+        if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    end
+end)
+local infJumpBtn = makeFarmButton("🦘 INF JUMP • OFF", 4)
+local infJumpOn = false
+infJumpBtn.MouseButton1Click:Connect(function()
+    infJumpOn = not infJumpOn
+    infJumpBtn.Text = infJumpOn and "🦘 INF JUMP • ON" or "🦘 INF JUMP • OFF"
+    infJumpBtn.BackgroundColor3 = infJumpOn and ON_COLOR or BG_BUTTON
+    showToast(infJumpOn and "🦘 Inf Jump ON" or "🦘 Inf Jump OFF", infJumpOn and GREEN or RED)
+end)
+local jumpConn = UserInputService.JumpRequest:Connect(function()
+    if infJumpOn and not flyOn then
+        local hum = getHumanoid()
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)local espBtn = makeFarmButton("👁️ ESP • OFF", 5)
+local espOn = false
+local espHighlights = {}
+local function removeESP(p)
+    if espHighlights[p] then espHighlights[p]:Destroy() espHighlights[p] = nil end
+end
+local function addESP(p)
+    if p == player or not p.Character then return end
+    removeESP(p)
+    local hl = Instance.new("Highlight")
+    hl.FillColor = Color3.fromRGB(255, 0, 0)
+    hl.OutlineColor = WHITE
+    hl.FillTransparency = 0.7
+    hl.Parent = p.Character
+    espHighlights[p] = hl
+end
+espBtn.MouseButton1Click:Connect(function()
+    espOn = not espOn
+    espBtn.Text = espOn and "👁️ ESP • ON" or "👁️ ESP • OFF"
+    espBtn.BackgroundColor3 = espOn and ON_COLOR or BG_BUTTON
+    showToast(espOn and "👁️ ESP ON" or "👁️ ESP OFF", espOn and GREEN or RED)
+    if espOn then
+        for _, p in ipairs(Players:GetPlayers()) do addESP(p) end
+    else
+        for p in pairs(espHighlights) do removeESP(p) end
+    end
+end)
+local godBtn = makeFarmButton("🛡️ GODMODE • OFF", 6)
+local godOn = false
+local godConn
+local function hookGod()
+    if godConn then godConn:Disconnect() godConn = nil end
+    local hum = getHumanoid()
+    if not hum or not godOn then return end
+    hum.Health = hum.MaxHealth
+    godConn = hum.HealthChanged:Connect(function(hp)
+        if godOn and hp > 0 and hp < hum.MaxHealth then hum.Health = hum.MaxHealth end
+    end)
+end
+godBtn.MouseButton1Click:Connect(function()
+    godOn = not godOn
+    godBtn.Text = godOn and "🛡️ GODMODE • ON" or "🛡️ GODMODE • OFF"
+    godBtn.BackgroundColor3 = godOn and ON_COLOR or BG_BUTTON
+    hookGod()
+    showToast(godOn and "🛡️ God ON" or "🛡️ God OFF", godOn and GREEN or RED)
+end)
+local invisBtn = makeFarmButton("👻 INVISIBLE • OFF", 7)
+local invisOn = false
+local invisOriginal = {}
+local invisConn
+local function setInvisible(obj)
+    if (obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart") or obj:IsA("Decal") then
+        if invisOriginal[obj] == nil then invisOriginal[obj] = obj.Transparency end
+        obj.Transparency = 1
+    end
+end
+local function applyInvisible()
+    if invisConn then invisConn:Disconnect() invisConn = nil end
+    for obj, t in pairs(invisOriginal) do
+        if obj and obj.Parent then obj.Transparency = t end
+    end
+    invisOriginal = {}
+    if not invisOn or not character then return end
+    for _, d in ipairs(character:GetDescendants()) do setInvisible(d) end
+    invisConn = character.DescendantAdded:Connect(function(d)
+        if invisOn then setInvisible(d) end
+    end)
+end
+invisBtn.MouseButton1Click:Connect(function()
+    invisOn = not invisOn
+    invisBtn.Text = invisOn and "👻 INVISIBLE • ON" or "👻 INVISIBLE • OFF"
+    invisBtn.BackgroundColor3 = invisOn and ON_COLOR or BG_BUTTON
+    applyInvisible()
+    showToast(invisOn and "👻 Invis ON" or "👻 Invis OFF", invisOn and GREEN or RED)
+end)
+local walkAirBtn = makeFarmButton("🌊 WALK ON AIR • OFF", 8)
+local walkAirOn = false
+local walkAirConn
+walkAirBtn.MouseButton1Click:Connect(function()
+    walkAirOn = not walkAirOn
+    walkAirBtn.Text = walkAirOn and "🌊 WALK ON AIR • ON" or "🌊 WALK ON AIR • OFF"
+    walkAirBtn.BackgroundColor3 = walkAirOn and ON_COLOR or BG_BUTTON
+    showToast(walkAirOn and "🌊 Walk Air ON" or "🌊 Walk Air OFF", walkAirOn and GREEN or RED)
+    if walkAirOn then
+        walkAirConn = RunService.Heartbeat:Connect(function()
+            local hrp = getHRP()
+            if hrp then
+                local v = hrp.AssemblyLinearVelocity
+                if v.Y < -1 then hrp.AssemblyLinearVelocity = Vector3.new(v.X, 0, v.Z) end
+            end
+        end)
+    else
+        if walkAirConn then walkAirConn:Disconnect() walkAirConn = nil end
+    end
+end)
+
+-- SERVER PAGE
+newLabel(serverPage, "🖥️ SERVER TOOLS", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+local antiLagBtn = makeButton(serverPage, "⚡ ANTI LAG • OFF", 1)
+local antiLagOn = false
+antiLagBtn.MouseButton1Click:Connect(function()
+    antiLagOn = not antiLagOn
+    antiLagBtn.Text = antiLagOn and "⚡ ANTI LAG • ON" or "⚡ ANTI LAG • OFF"
+    antiLagBtn.BackgroundColor3 = antiLagOn and ON_COLOR or BG_BUTTON
+    showToast(antiLagOn and "⚡ AntiLag ON" or "⚡ AntiLag OFF", antiLagOn and GREEN or RED)
+    if antiLagOn then
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                v.Enabled = false
+            end
+        end
+    end
+end)
+local antiAfkBtn = makeButton(serverPage, "💤 ANTI AFK • OFF", 2)
+local antiAfkOn = false
+antiAfkBtn.MouseButton1Click:Connect(function()
+    antiAfkOn = not antiAfkOn
+    antiAfkBtn.Text = antiAfkOn and "💤 ANTI AFK • ON" or "💤 ANTI AFK • OFF"
+    antiAfkBtn.BackgroundColor3 = antiAfkOn and ON_COLOR or BG_BUTTON
+    showToast(antiAfkOn and "💤 Anti AFK ON" or "💤 Anti AFK OFF", antiAfkOn and GREEN or RED)
+end)
+local afkConn = player.Idled:Connect(function()
+    if antiAfkOn then
+        local ok, vu = pcall(function() return game:GetService("VirtualUser") end)
+        if ok and vu then vu:CaptureController() vu:ClickButton2(Vector2.new()) end
+    end
+end)
+local themeBtn = makeButton(serverPage, "🌙 THEME • DARK", -3)
+local themeDark = true
+local themeOrig = {}
+themeBtn.MouseButton1Click:Connect(function()
+    themeDark = not themeDark
+    themeBtn.Text = themeDark and "🌙 THEME • DARK" or "☀️ THEME • LIGHT"
+    showToast(themeDark and "🌙 Dark" or "☀️ Light", themeDark and ACCENT_BLUE or Color3.fromRGB(255, 190, 70))
+    for _, obj in ipairs(mainFrame:GetDescendants()) do
+        if obj:IsA("Frame") or obj:IsA("TextButton") or obj:IsA("TextBox") or obj:IsA("ScrollingFrame") or obj:IsA("TextLabel") then
+            if themeOrig[obj] == nil then themeOrig[obj] = {bg = obj.BackgroundColor3, txt = obj.TextColor3} end
+            local o = themeOrig[obj]
+            if themeDark then
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then obj.TextColor3 = o.txt else obj.BackgroundColor3 = o.bg end
+            else
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                    if obj.TextColor3 == WHITE then obj.TextColor3 = Color3.fromRGB(30, 35, 50) end
+                else
+                    local bg = obj.BackgroundColor3
+                    if bg.R < 0.3 and bg.G < 0.3 and bg.B < 0.3 then obj.BackgroundColor3 = Color3.fromRGB(235, 238, 245) end
+                end
+            end
+        end
+    end
+end)local adminOn = false
+local adminGui
+local function removeAdminBadge()
+    if adminGui then adminGui:Destroy() adminGui = nil end
+end
+local function applyAdminBadge()
+    removeAdminBadge()
+    if not adminOn or not character then return end
+    local head = character:FindFirstChild("Head")
+    if not head then return end
+    local gui = Instance.new("BillboardGui")
+    gui.Adornee = head
+    gui.Size = UDim2.new(0, 220, 0, 40)
+    gui.StudsOffset = Vector3.new(0, 2.6, 0)
+    gui.AlwaysOnTop = true
+    gui.Parent = screenGui
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 22)
+    row.BackgroundTransparency = 1
+    row.Parent = gui
+    local list = Instance.new("UIListLayout")
+    list.FillDirection = Enum.FillDirection.Horizontal
+    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    list.Padding = UDim.new(0, 5)
+    list.Parent = row
+    local nL = Instance.new("TextLabel")
+    nL.AutomaticSize = Enum.AutomaticSize.X
+    nL.Size = UDim2.new(0, 0, 1, 0)
+    nL.BackgroundTransparency = 1
+    nL.Text = player.DisplayName
+    nL.TextColor3 = WHITE
+    nL.TextSize = 16
+    nL.Font = Enum.Font.GothamBold
+    nL.TextStrokeTransparency = 0.4
+    nL.Parent = row
+    local ch = Instance.new("ImageLabel")
+    ch.Size = UDim2.new(0, 18, 0, 18)
+    ch.BackgroundTransparency = 1
+    ch.Image = "rbxassetid://6031075931"
+    ch.ImageColor3 = VERIFIED_BLUE
+    ch.ScaleType = Enum.ScaleType.Fit
+    ch.Parent = row
+    local rL = Instance.new("TextLabel")
+    rL.Size = UDim2.new(1, 0, 0, 14)
+    rL.Position = UDim2.new(0, 0, 0, 24)
+    rL.BackgroundTransparency = 1
+    rL.Text = "@" .. player.Name
+    rL.TextColor3 = Color3.fromRGB(190, 205, 225)
+    rL.TextSize = 11
+    rL.Font = Enum.Font.GothamBold
+    rL.Parent = gui
+    adminGui = gui
+end
+newLabel(serverPage, "✔ VERIFIED BUNDLE", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = -2
+local adminBtn = makeButton(serverPage, "✔ VERIFIED • OFF", -1)
+adminBtn.MouseButton1Click:Connect(function()
+    adminOn = not adminOn
+    adminBtn.Text = adminOn and "✔ VERIFIED • ON" or "✔ VERIFIED • OFF"
+    adminBtn.BackgroundColor3 = adminOn and ON_COLOR or BG_BUTTON
+    applyAdminBadge()
+    showToast(adminOn and "✔ Verified ON" or "✔ Verified OFF", adminOn and GREEN or RED)
+end)
+
+-- PLAYER PAGE
+local function makePlayerButton(text, order) return makeButton(playerPage, text, order) end
+newLabel(playerPage, "👤 PLAYER TOOLS", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+local resetBtn = makePlayerButton("💀 RESET CHARACTER", 1)
+resetBtn.MouseButton1Click:Connect(function()
+    local hum = getHumanoid()
+    if hum then hum.Health = 0 end
+    showToast("💀 Reset", RED)
+end)
+local selectedPlayer = nil
+local selectPlayerBtn = makePlayerButton("🎯 SELECT PLAYER", 2)
+local selectPlayerFrame = Instance.new("Frame")
+selectPlayerFrame.LayoutOrder = 3
+selectPlayerFrame.Size = UDim2.new(1, 0, 0, 120)
+selectPlayerFrame.BackgroundColor3 = BG_DARK
+selectPlayerFrame.Visible = false
+selectPlayerFrame.Parent = playerPage
+corner(selectPlayerFrame, 8)
+local spScroll = Instance.new("ScrollingFrame")
+spScroll.Size = UDim2.new(1, -8, 1, -8)
+spScroll.Position = UDim2.new(0, 4, 0, 4)
+spScroll.BackgroundTransparency = 1
+spScroll.ScrollBarThickness = 3
+spScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+spScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+spScroll.Parent = selectPlayerFrame
+local spLayout = Instance.new("UIListLayout")
+spLayout.Padding = UDim.new(0, 3)
+spLayout.Parent = spScroll
+local function refreshSelectList()
+    for _, c in ipairs(spScroll:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local row = Instance.new("TextButton")
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.BackgroundColor3 = (selectedPlayer == p) and ON_COLOR or BG_BUTTON
+            row.Text = p.DisplayName
+            row.TextSize = 10
+            row.Font = Enum.Font.GothamBold
+            row.TextColor3 = WHITE
+            row.AutoButtonColor = false
+            row.Parent = spScroll
+            corner(row, 6)
+            row.MouseButton1Click:Connect(function()
+                selectedPlayer = (selectedPlayer == p) and nil or p
+                refreshSelectList()
+            end)
+        end
+    end
+end
+selectPlayerBtn.MouseButton1Click:Connect(function()
+    selectPlayerFrame.Visible = not selectPlayerFrame.Visible
+    if selectPlayerFrame.Visible then refreshSelectList() end
+end)
+local tpPlayerBtn = makePlayerButton("🚀 TELEPORT PLAYER", 4)
+tpPlayerBtn.MouseButton1Click:Connect(function()
+    if not selectedPlayer then showToast("⚠️ Pilih player", Color3.fromRGB(255, 190, 70)) return end
+    local tHrp = selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local myHrp = getHRP()
+    if tHrp and myHrp then
+        myHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 3)
+        showToast("🚀 TP ke @" .. selectedPlayer.Name, GREEN)
+    end
+end)
+
+-- COPY AVATAR (dengan animasi)
+local copyTarget = nil
+local selectCopyBtn = makePlayerButton("🎭 SELECT COPY", 5)
+local selectCopyFrame = Instance.new("Frame")
+selectCopyFrame.LayoutOrder = 6
+selectCopyFrame.Size = UDim2.new(1, 0, 0, 120)
+selectCopyFrame.BackgroundColor3 = BG_DARK
+selectCopyFrame.Visible = false
+selectCopyFrame.Parent = playerPage
+corner(selectCopyFrame, 8)
+local scScroll = Instance.new("ScrollingFrame")
+scScroll.Size = UDim2.new(1, -8, 1, -8)
+scScroll.Position = UDim2.new(0, 4, 0, 4)
+scScroll.BackgroundTransparency = 1
+scScroll.ScrollBarThickness = 3
+scScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scScroll.Parent = selectCopyFrame
+local scLayout = Instance.new("UIListLayout")
+scLayout.Padding = UDim.new(0, 3)
+scLayout.Parent = scScroll
+local function refreshCopyList()
+    for _, c in ipairs(scScroll:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local row = Instance.new("TextButton")
+            row.Size = UDim2.new(1, 0, 0, 28)
+            row.BackgroundColor3 = (copyTarget == p) and ON_COLOR or BG_BUTTON
+            row.Text = p.DisplayName .. " (@" .. p.Name .. ")"
+            row.TextSize = 9
+            row.Font = Enum.Font.GothamBold
+            row.TextColor3 = WHITE
+            row.AutoButtonColor = false
+            row.Parent = scScroll
+            corner(row, 6)
+            row.MouseButton1Click:Connect(function()
+                copyTarget = (copyTarget == p) and nil or p
+                refreshCopyList()
+            end)
+        end
+    end
+end
+selectCopyBtn.MouseButton1Click:Connect(function()
+    selectCopyFrame.Visible = not selectCopyFrame.Visible
+    if selectCopyFrame.Visible then refreshCopyList() end
+end)
+local copyAvaBtn = makePlayerButton("🎭 COPY AVATAR", 7)
+copyAvaBtn.MouseButton1Click:Connect(function()
+    if not copyTarget then showToast("⚠️ Pilih target dulu", Color3.fromRGB(255, 190, 70)) return end
+    local targetUserId = copyTarget.UserId
+    local hum = getHumanoid()
+    if not hum then showToast("⚠️ Karakter belum spawn", RED) return end
+    showToast("🎭 Copying avatar @" .. copyTarget.Name .. "...", ACCENT_BLUE)
+    task.spawn(function()
+        local ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(targetUserId) end)
+        if not ok or not desc then showToast("❌ Gagal ambil avatar", RED) return end
+        -- apply description
+        pcall(function() hum:ApplyDescription(desc) end)
+        -- copy animasi (R15/R6)
+        local animOk, animModel = pcall(function() return Players:CreateHumanoidModelFromUserId(targetUserId) end)
+        if animOk and animModel then
+            local targetAnim = animModel:FindFirstChild("Animate")
+            if targetAnim then
+                local myAnim = character:FindFirstChild("Animate")
+                if myAnim then myAnim:Destroy() end
+                local newAnim = targetAnim:Clone()
+                newAnim.Parent = character
+                task.wait(0.2)
+                if newAnim and newAnim.Parent then
+                    newAnim.Enabled = false
+                    task.wait(0.1)
+                    newAnim.Enabled = true
+                end
+            end
+            animModel:Destroy()
+        end
+        showToast("✅ Avatar + animation copied!", GREEN)
+    end)
+end)
+local restoreAvaBtn = makePlayerButton("♻️ RESTORE AVATAR", 8)
+restoreAvaBtn.MouseButton1Click:Connect(function()
+    local hum = getHumanoid()
+    if hum then hum.Health = 0 end
+    showToast("♻️ Respawning dengan avatar sendiri...", ACCENT_BLUE)
+end)
+
+-- FOLLOW
+local followBtn = makePlayerButton("🎯 FOLLOW • OFF", 9)
+local followOn = false
+local followConn
+followBtn.MouseButton1Click:Connect(function()
+    if not selectedPlayer then showToast("⚠️ Pilih player", Color3.fromRGB(255, 190, 70)) return end
+    followOn = not followOn
+    followBtn.Text = followOn and "🎯 FOLLOW • ON" or "🎯 FOLLOW • OFF"
+    followBtn.BackgroundColor3 = followOn and ON_COLOR or BG_BUTTON
+    showToast(followOn and ("🎯 Following @" .. selectedPlayer.Name) or "🎯 Follow OFF", followOn and GREEN or RED)
+    if followOn then
+        followConn = RunService.Heartbeat:Connect(function()
+            if not followOn or not selectedPlayer then return end
+            local tHrp = selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local myHrp = getHRP()
+            if tHrp and myHrp then
+                myHrp.CFrame = myHrp.CFrame:Lerp(tHrp.CFrame * CFrame.new(0, 0, 3), 0.15)
+            end
+        end)
+    else
+        if followConn then followConn:Disconnect() followConn = nil end
+    end
+end)
+
+-- HIDE ALL
+local hideAllBtn = makePlayerButton("🚫 HIDE ALL • OFF", 10)
+local hideAllOn = false
+local hideAllConn
+local hiddenOrig = {}
+local function hideChar(char)
+    if not char or char == character then return end
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("BasePart") or d:IsA("Decal") then
+            if hiddenOrig[d] == nil then hiddenOrig[d] = d.Transparency end
+            d.Transparency = 1
+        end
+    end
+end
+local function restoreAll()
+    for o, t in pairs(hiddenOrig) do if o and o.Parent then o.Transparency = t end end
+    hiddenOrig = {}
+end
+hideAllBtn.MouseButton1Click:Connect(function()
+    hideAllOn = not hideAllOn
+    hideAllBtn.Text = hideAllOn and "🚫 HIDE ALL • ON" or "🚫 HIDE ALL • OFF"
+    hideAllBtn.BackgroundColor3 = hideAllOn and ON_COLOR or BG_BUTTON
+    showToast(hideAllOn and "🚫 Hidden" or "🚫 Visible", hideAllOn and GREEN or RED)
+    if hideAllOn then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player then hideChar(p.Character) end
+        end
+        hideAllConn = workspace.DescendantAdded:Connect(function(d)
+            if not hideAllOn then return end
+            local m = d:FindFirstAncestorOfClass("Model")
+            if m and Players:GetPlayerFromCharacter(m) and m ~= character then
+                task.wait(0.1)
+                hideChar(m)
+            end
+        end)
+    else
+        if hideAllConn then hideAllConn:Disconnect() hideAllConn = nil end
+        restoreAll()
+    end
+end)
+
+-- TELEPORT PAGE
+newLabel(teleportPage, "📍 TELEPORT SLOTS", 11, Enum.Font.GothamBold, ACCENT_BLUE, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 18), Enum.TextXAlignment.Left).LayoutOrder = 0
+local tpSlots = {}
+for i = 1, 10 do
+    local row = Instance.new("Frame")
+    row.LayoutOrder = i
+    row.Size = UDim2.new(1, 0, 0, 32)
+    row.BackgroundColor3 = BG_DARK
+    row.Parent = teleportPage
+    corner(row, 6)
+    newLabel(row, "SLOT " .. i, 10, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 0), UDim2.new(1, -120, 1, 0), Enum.TextXAlignment.Left)
+    local saveB = Instance.new("TextButton")
+    saveB.Size = UDim2.new(0, 50, 0, 24)
+    saveB.Position = UDim2.new(1, -110, 0.5, -12)
+    saveB.BackgroundColor3 = BG_BUTTON
+    saveB.Text = "💾"
+    saveB.TextSize = 12
+    saveB.Font = Enum.Font.GothamBold
+    saveB.TextColor3 = WHITE
+    saveB.Parent = row
+    corner(saveB, 5)
+    local goB = Instance.new("TextButton")
+    goB.Size = UDim2.new(0, 50, 0, 24)
+    goB.Position = UDim2.new(1, -56, 0.5, -12)
+    goB.BackgroundColor3 = BG_BUTTON
+    goB.Text = "🚀"
+    goB.TextSize = 12
+    goB.Font = Enum.Font.GothamBold
+    goB.TextColor3 = WHITE
+    goB.Parent = row
+    corner(goB, 5)
+    saveB.MouseButton1Click:Connect(function()
+        local hrp = getHRP()
+        if hrp then tpSlots[i] = hrp.CFrame saveB.Text = "✅" task.delay(1, function() saveB.Text = "💾" end) end
+    end)
+    goB.MouseButton1Click:Connect(function()
+        local hrp = getHRP()
+        if hrp and tpSlots[i] then hrp.CFrame = tpSlots[i] goB.Text = "✅" task.delay(1, function() goB.Text = "🚀" end) end
+    end)
+end
+
+-- USER PROFILE
+local userBox = Instance.new("Frame")
+userBox.Size = UDim2.new(1, -16, 0, 34)
+userBox.Position = UDim2.new(0, 8, 1, -40)
+userBox.BackgroundColor3 = BG_DARK
+userBox.Parent = mainFrame
+corner(userBox, 8)
+newLabel(userBox, player.DisplayName .. "  @" .. player.Name, 10, Enum.Font.GothamBold, WHITE, UDim2.new(0, 8, 0, 0), UDim2.new(1, -16, 1, 0), Enum.TextXAlignment.Left)
+
+-- RESPAWN
+player.CharacterAdded:Connect(function(c)
+    character = c
+    flyOn = false
+    if flyBV then flyBV:Destroy() flyBV = nil end
+    if flyBG then flyBG:Destroy() flyBG = nil end
+    flyBtn.Text = "✈️ FLY • OFF"
+    flyBtn.BackgroundColor3 = BG_BUTTON
+    c:WaitForChild("Humanoid")
+    if speedOn then applySpeed() end
+    hookGod()
+    applyInvisible()
+    applyAdminBadge()
+end)
+
+-- DRAGGABLE + LOGO
+local dragging, dragStart, startPos = false, nil, nil
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true dragStart = input.Position startPos = mainFrame.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local d = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+    end
+end)
+local logoBtn = Instance.new("TextButton")
+logoBtn.Size = UDim2.new(0, 44, 0, 44)
+logoBtn.Position = UDim2.new(0, 15, 0.5, -22)
+logoBtn.BackgroundColor3 = BG_BLACK
+logoBtn.Text = "$"
+logoBtn.TextSize = 18
+logoBtn.Font = Enum.Font.GothamMedium
+logoBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+logoBtn.Parent = screenGui
+corner(logoBtn, 22)
+stroke(logoBtn, Color3.fromRGB(255, 215, 0), 1.5)
+logoBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+print("✅ UNIVERSAL v15.1 Loaded!")
+
+end, function(e)
+    return tostring(e)
+end)
+
+if __ok then
+    pcall(function()
+        StarterGuiSvc:SetCore("SendNotification", {
+            Title = "UNIVERSAL v15.1",
+            Text = "Loaded ✔",
+            Duration = 4,
+        })
+    end)
+else
+    warn("Error: " .. tostring(__err))
+end
