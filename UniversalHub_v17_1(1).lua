@@ -8689,6 +8689,12 @@ function C.diagnose()
     local ids = {}
     for id, w in pairs(C.worn) do table.insert(ids, tostring(id) .. ":" .. tostring(w.name)) end
     add("Dipakai: " .. (#ids > 0 and table.concat(ids, ", ") or "-"))
+    for id, w in pairs(C.worn) do
+        local okS, why = true, nil
+        if C.isShown then okS, why = C.isShown(id) end
+        local nh = C.handlesOf and #C.handlesOf(id) or 0
+        add("  - " .. tostring(w.name) .. " (" .. tostring(id) .. "): " .. (okS and "tampil" or ("TIDAK tampil: " .. tostring(why))) .. " | handle: " .. nh)
+    end
     add("Terakhir: " .. tostring(C.lastErr or "-"))
     add("-- log --")
     for i = math.max(1, #C.log - 8), #C.log do add(C.log[i]) end
@@ -9743,6 +9749,470 @@ do
         end)
         table.insert(C.rows, b)
     end
+end
+
+-- ============================================================
+-- PATCH KATALOG v17.2 — item berstatus "Dipakai" tapi TIDAK tampil di avatar
+-- Penyebab: status sukses diberikan walau item tidak benar-benar menempel / terlihat
+--   (1) cara cadangan C (rebuild) & D (ApplyDescription) selalu dianggap sukses tanpa dicek
+--   (2) cara A / B hanya mengecek "ada tanda UHCat", bukan apakah item tersambung ke badan
+--   (3) aksesori topi lama (class "Hat") tidak dikenali sama sekali
+--   (4) pesan error asli ketimpa pesan "detail bundle tidak bisa diambil"
+--   (5) kalau game menghapus aksesori setelah dipasang, status tetap "Dipakai"
+-- Perbaikan: tiap cara DIVERIFIKASI (Handle ada + tersambung ke badan + dekat karakter), diperbaiki
+-- otomatis kalau salah tempel, kalau gagal lanjut ke cara berikutnya, dan ada penjaga yang memasang
+-- ulang item yang hilang (maks 3x lalu memberi tahu).
+-- (ditaruh SETELAH patch v17.1 supaya menimpa versinya)
+-- ============================================================
+do
+    local function anchorOf(ch)
+        return ch:FindFirstChild("Head") or ch:FindFirstChild("HumanoidRootPart") or ch.PrimaryPart
+    end
+
+    local function isJoint(j)
+        return j:IsA("JointInstance") or j:IsA("WeldConstraint")
+    end
+
+    -- semua Handle (BasePart) milik item ini
+    function C.handlesOf(id)
+        local ch, out = C.char(), {}
+        if not ch then return out end
+        for _, d in ipairs(ch:GetDescendants()) do
+            if d:IsA("BasePart") and d:GetAttribute("UHCat") == id then table.insert(out, d) end
+        end
+        return out
+    end
+
+    local function jointedToBody(h, ch)
+        for _, j in ipairs(h:GetChildren()) do
+            if isJoint(j) then
+                local o = (j.Part0 == h) and j.Part1 or j.Part0
+                if o and o ~= h and o.Parent == ch then return true end
+            end
+        end
+        return false
+    end
+
+    -- apakah Handle ini benar-benar menempel di karakter?
+    local function handleOk(h, ch)
+        local anc = anchorOf(ch)
+        if not anc then return true end
+        local jointed = jointedToBody(h, ch) or h.Anchored or h:FindFirstChildOfClass("WrapLayer") ~= nil
+        if not jointed then return false, "tidak tersambung ke badan" end
+        local d = (h.Position - anc.Position).Magnitude
+        if d ~= d or d > 60 then return false, "posisi terlalu jauh dari karakter" end
+        return true
+    end
+
+    -- sambung ulang Handle yang salah tempel (lepas / jauh): tempel ke attachment yang sama di badan
+    function C.fixAttach(id)
+        local ch = C.char()
+        if not ch then return 0 end
+        local fixed = 0
+        for _, h in ipairs(C.handlesOf(id)) do
+            if not handleOk(h, ch) then
+                pcall(function()
+                    for _, j in ipairs(h:GetChildren()) do
+                        if isJoint(j) then j:Destroy() end
+                    end
+                    h.Anchored = false
+                    h.CanCollide = false
+                    h.Massless = true
+                    local at
+                    for _, c in ipairs(h:GetChildren()) do
+                        if c:IsA("Attachment") then at = c break end
+                    end
+                    local tP, tA
+                    if at then
+                        for _, p in ipairs(ch:GetChildren()) do
+                            if p:IsA("BasePart") and p ~= h then
+                                local f = p:FindFirstChild(at.Name)
+                                if f and f:IsA("Attachment") then tP, tA = p, f break end
+                            end
+                        end
+                    end
+                    local w = Instance.new("Weld")
+                    w.Name = "AccessoryWeld"
+                    if tP and tA then
+                        h.CFrame = tP.CFrame * tA.CFrame * at.CFrame:Inverse()
+                        w.Part0, w.Part1, w.C0, w.C1 = tP, h, tA.CFrame, at.CFrame
+                    else
+                        -- tidak ada attachment yang cocok -> taruh di atas kepala
+                        local hd = ch:FindFirstChild("Head") or ch:FindFirstChild("UpperTorso") or ch:FindFirstChild("Torso") or anchorOf(ch)
+                        if not hd then return end
+                        local top = (hd.Name == "Head") and (hd.Size.Y / 2) or 0
+                        w.Part0, w.Part1, w.C0 = hd, h, CFrame.new(0, top + h.Size.Y / 2, 0)
+                        h.CFrame = hd.CFrame * w.C0
+                    end
+                    w.Parent = h
+                    fixed = fixed + 1
+                end)
+            end
+        end
+        return fixed
+    end
+
+    -- sekali cek: item ini tampil di karakter?  (true) atau (false, alasan)
+    function C.isShown(id)
+        local ch = C.char()
+        if not ch then return false, "karakter tidak ada" end
+        local hs = C.handlesOf(id)
+        if #hs == 0 then
+            if C.hasTag(id) then return true end -- baju classic / wajah / dll (tanpa Handle)
+            return false, "item tidak menempel di karakter"
+        end
+        for _, h in ipairs(hs) do
+            local ok, why = handleOk(h, ch)
+            if not ok then return false, why end
+        end
+        return true
+    end
+
+    -- tunggu sampai item tampil; kalau salah tempel diperbaiki dulu
+    function C.verifyWorn(id, tmax)
+        local t0, fixed, why = os.clock(), false, nil
+        while true do
+            local ok, w = C.isShown(id)
+            if ok then return true end
+            why = w
+            if not fixed and os.clock() - t0 >= 0.4 and #C.handlesOf(id) > 0 then
+                fixed = true
+                local n = C.fixAttach(id)
+                C.note("fixAttach " .. tostring(id) .. " -> " .. tostring(n) .. " (" .. tostring(w) .. ")")
+            end
+            if os.clock() - t0 >= (tmax or 1.5) then break end
+            task.wait(0.15)
+        end
+        local ok, w = C.isShown(id)
+        if ok then return true end
+        C.note("verify gagal " .. tostring(id) .. ": " .. tostring(w or why))
+        return false, w or why
+    end
+
+    local function clearTagged(id)
+        local ch = C.char()
+        if not ch then return end
+        for _, d in ipairs(ch:GetDescendants()) do
+            if d:GetAttribute("UHCat") == id then
+                local acc = d:IsA("Accessory") and d or d:FindFirstAncestorOfClass("Accessory")
+                pcall(function() (acc or d):Destroy() end)
+            end
+        end
+    end
+
+    -- ---- 1) handleObj: dukung topi lama (class "Hat"), sisanya pakai versi sebelumnya ----
+    local prevHandleObj = C.handleObj
+    function C.handleObj(o, id)
+        local ch = C.char()
+        if ch and o and o.ClassName == "Hat" then
+            local h = o:FindFirstChild("Handle")
+            local head = ch:FindFirstChild("Head")
+            if not (h and h:IsA("BasePart") and head) then return 0 end
+            for _, v in ipairs(o:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Anchored = false
+                    v.CanCollide = false
+                    v.Massless = true
+                elseif v:IsA("Script") or v:IsA("LocalScript") then
+                    v:Destroy()
+                end
+            end
+            for _, j in ipairs(h:GetChildren()) do
+                if isJoint(j) then j:Destroy() end
+            end
+            local ap = CFrame.new()
+            pcall(function() ap = o.AttachmentPoint end)
+            h:SetAttribute("UHCat", id)
+            h:SetAttribute("CCI", true)
+            h:SetAttribute("UHAcc", true)
+            h.Name = o.Name
+            h.Parent = ch
+            local w = Instance.new("Weld")
+            w.Name = "AccWeld"
+            w.Part0 = head
+            w.Part1 = h
+            w.C0 = CFrame.new(0, head.Size.Y / 2, 0)
+            w.C1 = ap
+            h.CFrame = head.CFrame * w.C0 * ap:Inverse()
+            w.Parent = h
+            pcall(function() o:Destroy() end)
+            return 1
+        end
+        return prevHandleObj(o, id)
+    end
+
+    -- ---- 2) wearAssetRaw: tiap cara diverifikasi ----
+    local function tryObjs(id, atype, objs, errs, label)
+        clearTagged(id)
+        local n = 0
+        for _, o in ipairs(objs) do
+            local okH, cnt = pcall(C.handleObj, o, id)
+            if okH then n = n + (cnt or 0) else C.lastErr = tostring(cnt) end
+        end
+        for _, o in ipairs(objs) do pcall(function() if o.Parent == nil then o:Destroy() end end) end
+        if n > 0 then
+            local ok, why = C.verifyWorn(id, 1.8)
+            if ok then
+                pcall(C.autoSlot, atype)
+                return true
+            end
+            table.insert(errs, label .. ":" .. tostring(why))
+            clearTagged(id)
+        else
+            table.insert(errs, label .. ":" .. tostring(C.lastErr or "bentuk item tidak dikenali"))
+        end
+        return false
+    end
+
+    function C.wearAssetRaw(id, atype, quiet)
+        C.worn_desc = false
+        C.lastErr = nil
+        local errs = {}
+        if not atype then
+            local ok, info = pcall(function() return game:GetService("MarketplaceService"):GetProductInfo(id) end)
+            if ok and info then atype = tonumber(info.AssetTypeId) end
+        end
+        atype = tonumber(atype)
+        C.lastType = atype
+
+        -- BADAN / KEPALA
+        if atype and C.BODYDESC[atype] then
+            local prop = C.BODYDESC[atype]
+            local old = C.bodyOv[prop]
+            if old and old ~= id then C.bodyIds[old] = nil end
+            C.bodyOv[prop] = id
+            C.bodyIds[id] = prop
+            if C.deferBody then return true end
+            if C.applyBody() then return true end
+            C.bodyOv[prop] = old
+            C.bodyIds[id] = nil
+            if old then C.bodyIds[old] = prop end
+            return false
+        end
+
+        -- ANIMASI
+        if atype and C.ANIMSLOT[atype] then
+            if C.setAnim(id, atype) then return true end
+            C.lastErr = "script Animate tidak ditemukan"
+            return false
+        end
+
+        -- A) muat aset langsung (GetObjects / LoadAsset)
+        local objs = C.loadObjs(id)
+        if objs then
+            if tryObjs(id, atype, objs, errs, "A") then return true end
+        else
+            table.insert(errs, "A:GetObjects tidak tersedia / aset tidak bisa dimuat")
+        end
+
+        -- B) dummy dari HumanoidDescription
+        C.lastErr = nil
+        if atype and C.viaDummy(id, atype) then
+            local ok, why = C.verifyWorn(id, 1.8)
+            if ok then
+                pcall(C.autoSlot, atype)
+                return true
+            end
+            table.insert(errs, "B:" .. tostring(why))
+            clearTagged(id)
+        else
+            table.insert(errs, "B:" .. tostring(C.lastErr or "tipe item tidak didukung"))
+        end
+
+        -- C) bangun ulang avatar lewat engine copy  (sekarang dicek hasilnya)
+        C.lastErr = nil
+        local b2 = C.snap()
+        if C.viaDesc(id, atype) then
+            pcall(C.tagNew, id, b2)
+            local ok, why = C.verifyWorn(id, 2.2)
+            if ok then
+                C.worn_desc = true
+                return true
+            end
+            table.insert(errs, "C:" .. tostring(why))
+        else
+            table.insert(errs, "C:rebuild gagal")
+        end
+
+        -- D) ApplyDescription bawaan  (sekarang dicek hasilnya)
+        local b3 = C.snap()
+        if C.viaNative(id, atype) then
+            pcall(C.tagNew, id, b3)
+            local ok, why = C.verifyWorn(id, 2.2)
+            if ok then
+                C.worn_desc = true
+                return true
+            end
+            table.insert(errs, "D:" .. tostring(why))
+        else
+            table.insert(errs, "D:ApplyDescription gagal")
+        end
+
+        C.lastErr = table.concat(errs, " | ")
+        warn("[UniversalHub Catalog] gagal pasang " .. tostring(id) .. " (tipe " .. tostring(atype) .. "): " .. C.lastErr)
+        return false
+    end
+
+    -- ---- 3) wear: status jujur + penjaga ----
+    C.keepRetry = C.keepRetry or {}
+    C.charT = C.charT or 0
+    player.CharacterAdded:Connect(function()
+        C.charT = os.clock()
+        C.keepRetry = {}
+    end)
+
+    function C.startKeeper()
+        if C.keeperOn then return end
+        C.keeperOn = true
+        table.insert(cleanupFns, function() C.keeperOn = false end)
+        task.spawn(function()
+            local miss = {}
+            while C.keeperOn do
+                task.wait(2.5)
+                local cs = pages.CS
+                local ch, hum = C.char(), C.hum()
+                if ch and hum and hum.Health > 0 and not C.reapplying and not (cs and cs.active)
+                    and os.clock() - (C.charT or 0) > 10 then
+                    local todo = {}
+                    for id, w in pairs(C.worn) do
+                        local at = tonumber(w.assetType)
+                        local plain = w.itemType ~= "Bundle" and not w.special and not C.bundleKids[id] and not C.wearing[id]
+                            and not (at and (C.BODYDESC[at] or C.ANIMSLOT[at]))
+                        if plain then table.insert(todo, w) end
+                    end
+                    for _, w in ipairs(todo) do
+                        local id = w.id
+                        local ok = C.isShown(id)
+                        if not ok and #C.handlesOf(id) > 0 then
+                            pcall(C.fixAttach, id)
+                            ok = C.isShown(id)
+                        end
+                        if ok then
+                            miss[id] = 0
+                            C.keepRetry[id] = 0
+                        else
+                            miss[id] = (miss[id] or 0) + 1
+                            if miss[id] >= 2 then
+                                miss[id] = 0
+                                local tries = (C.keepRetry[id] or 0) + 1
+                                C.keepRetry[id] = tries
+                                task.spawn(function()
+                                    if tries <= 3 then
+                                        local okP, res = pcall(C.wearAsset, id, w.assetType, true)
+                                        if okP and res then
+                                            C.worn[id] = w
+                                            if C.adj[id] then pcall(C.applyAdj, id) end
+                                        end
+                                    else
+                                        C.worn[id] = nil
+                                        C.setStatus("⚠️ " .. tostring(w.name) .. " tidak mau tampil (dihapus game?)", Color3.fromRGB(255, 190, 70))
+                                        C.setHint("Item dilepas dari daftar karena terus hilang dari avatar. Tekan DIAGNOSA lalu kirim hasilnya", Color3.fromRGB(255, 190, 70))
+                                    end
+                                    pcall(C.refresh)
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    function C.wear(item)
+        local id = tonumber(item.id)
+        if not id then
+            C.setStatus("❌ ID tidak valid", RED)
+            return
+        end
+        if C.worn[id] then
+            C.setStatus("⏳ Melepas: " .. tostring(item.name), GREY)
+            local w = C.worn[id]
+            task.spawn(function()
+                C.unwear(w)
+                C.setStatus("Dilepas: " .. tostring(item.name), GREY)
+                C.refresh()
+            end)
+            return
+        end
+        if item.special == "headless" then
+            C.worn[id] = { id = id, name = item.name, itemType = "Special", assetType = 8, special = "headless" }
+            C.setNative("head", true)
+            C.sel = id
+            C.setStatus("✅ Dipakai: " .. tostring(item.name), GREEN)
+            C.setHint("Dipakai: Tanpa kepala - pakai topi / aksesori lalu tekan ATUR")
+            C.refresh()
+            return
+        end
+        if C.wearing[id] then
+            C.setStatus("⏳ Item ini sedang dipasang...", GREY)
+            return
+        end
+        C.setStatus("⏳ Memasang: " .. tostring(item.name), GREY)
+        task.spawn(function()
+            C.wearing[id] = true
+            local success = false
+            local isBundle = (item.itemType == "Bundle")
+            if isBundle then
+                success = C.wearBundle(id)
+            else
+                local atype = tonumber(item.assetType)
+                if not atype then
+                    local okInfo, info = pcall(function()
+                        return game:GetService("MarketplaceService"):GetProductInfo(id)
+                    end)
+                    if okInfo and info then
+                        atype = tonumber(info.AssetTypeId)
+                        item.assetType = atype
+                    end
+                end
+                if not atype then
+                    success = C.wearBundle(id)
+                    if not success and not C.lastErr then
+                        C.lastErr = "tipe item tidak diketahui"
+                    end
+                else
+                    C.worn[id] = { id = id, name = item.name, itemType = item.itemType or "Asset", assetType = atype }
+                    success = C.wearAsset(id, atype)
+                    if not success then
+                        local assetErr = C.lastErr -- simpan alasan asli (jangan ketimpa error bundle)
+                        C.worn[id] = nil
+                        if item.itemType ~= "Asset" then
+                            success = C.wearBundle(id)
+                        end
+                        if not success and assetErr then C.lastErr = assetErr end
+                    end
+                end
+            end
+            C.wearing[id] = nil
+            if success then
+                if not C.worn[id] then
+                    C.worn[id] = { id = id, name = item.name, itemType = item.itemType or "Asset",
+                        assetType = item.assetType or C.lastType }
+                end
+                C.sel = id
+                C.setStatus("✅ Dipakai: " .. tostring(item.name), GREEN)
+                local at = tonumber(item.assetType or C.lastType)
+                if at == 8 or C.looksLikeHead(item.name) then
+                    C.setHint("Dipakai: " .. tostring(item.name) .. " - tekan ATUR untuk menggeser / memutar")
+                else
+                    C.setHint("Dipakai: " .. tostring(item.name) .. " - tekan ATUR untuk melepas / menggeser")
+                end
+                pcall(C.save)
+                C.keepRetry[id] = 0
+                pcall(C.startKeeper)
+            else
+                C.worn[id] = nil
+                C.setStatus("Gagal memasang ❌ " .. string.sub(tostring(C.lastErr or "tidak diketahui"), 1, 80), RED)
+                C.setHint("Gagal: " .. string.sub(tostring(C.lastErr or "tidak diketahui"), 1, 160) .. " (DIAGNOSA di LEPAS BAWAAN untuk detail)", RED)
+                warn("[UniversalHub] Gagal pasang " .. tostring(id) .. ": " .. tostring(C.lastErr))
+            end
+            task.wait(0.2)
+            C.refresh()
+        end)
+    end
+
+    -- item yang dimuat dari simpanan / respawn juga dijaga
+    pcall(C.startKeeper)
 end
 
 -- ---------- TOMBOL ----------
