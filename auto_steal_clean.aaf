@@ -1,0 +1,742 @@
+--[[
+    AUTO STEAL — UI bersih + steal multi-method
+    Game: Break and Steal style (Plots / AnimalPodiums / Steal prompt)
+    • Panel UI gelap (toggle, radius, mode, status)
+    • Progress pill di bawah (bisa digeser)
+    • Steal: fireproximityprompt + getconnections + HoldDuration bypass
+]]
+
+repeat task.wait() until game:IsLoaded()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+local PlayerGui = LP:WaitForChild("PlayerGui")
+
+----------------------------------------------------------------------
+-- STATE
+----------------------------------------------------------------------
+local Steal = {
+	Enabled = false,
+	Radius = 55,
+	Mode = "half", -- "half" | "instant"
+	HalfFireRange = 12,
+	HalfHoldMin = 0.9,
+	HalfHoldMax = 2.8,
+	HalfEntryDelay = 0.15,
+	Cooldown = 0.08,
+	Data = {},
+}
+local isStealing = false
+local stealStartTime = 0
+local lastStealAt = 0
+local autoConn = nil
+local stats = { attempts = 0, success = 0 }
+
+_G.AutoSteal = Steal
+
+----------------------------------------------------------------------
+-- STEAL LOGIC
+----------------------------------------------------------------------
+local function rootPart()
+	local char = LP.Character
+	if not char then return nil end
+	return char:FindFirstChild("HumanoidRootPart")
+		or char:FindFirstChild("UpperTorso")
+		or char:FindFirstChild("Torso")
+end
+
+local function isMyPlot(plot)
+	if not plot then return false end
+	local sign = plot:FindFirstChild("PlotSign")
+	if sign then
+		local yb = sign:FindFirstChild("YourBase")
+		if yb and yb:IsA("BillboardGui") and yb.Enabled then
+			return true
+		end
+	end
+	-- fallback: attribute owner
+	local uid = plot:GetAttribute("OwnerUserId") or plot:GetAttribute("Owner")
+	if uid == LP.UserId or tostring(uid) == LP.Name then
+		return true
+	end
+	return false
+end
+
+local function promptDistance(prompt)
+	local root = rootPart()
+	if not root or not prompt then return math.huge end
+	local part = prompt.Parent
+	if part and part:IsA("Attachment") then
+		part = part.Parent
+	end
+	if part and part:IsA("BasePart") then
+		return (part.Position - root.Position).Magnitude
+	end
+	local ok, pos = pcall(function()
+		if prompt.Parent and prompt.Parent:IsA("Attachment") then
+			return prompt.Parent.WorldPosition
+		end
+		return nil
+	end)
+	if ok and pos then
+		return (pos - root.Position).Magnitude
+	end
+	return math.huge
+end
+
+local function isStealPrompt(pr)
+	if not pr or not pr:IsA("ProximityPrompt") then return false end
+	local a = string.lower(tostring(pr.ActionText or ""))
+	local o = string.lower(tostring(pr.ObjectText or ""))
+	local n = string.lower(tostring(pr.Name or ""))
+	return a:find("steal", 1, true)
+		or o:find("steal", 1, true)
+		or n:find("steal", 1, true)
+end
+
+local function findNearestPrompt()
+	local root = rootPart()
+	if not root then return nil end
+	local plots = workspace:FindFirstChild("Plots")
+	if not plots then return nil end
+
+	local nearest, best = nil, math.huge
+	for _, plot in ipairs(plots:GetChildren()) do
+		if plot:IsA("Model") and not isMyPlot(plot) then
+			local pods = plot:FindFirstChild("AnimalPodiums")
+			if pods then
+				for _, pod in ipairs(pods:GetChildren()) do
+					local base = pod:FindFirstChild("Base")
+					local sp = base and base:FindFirstChild("Spawn")
+					if sp then
+						local d = (sp.Position - root.Position).Magnitude
+						if d <= Steal.Radius and d < best then
+							local found
+							local att = sp:FindFirstChild("PromptAttachment")
+							if att then
+								for _, pr in ipairs(att:GetChildren()) do
+									if isStealPrompt(pr) then found = pr break end
+								end
+							end
+							if not found then
+								for _, pr in ipairs(sp:GetDescendants()) do
+									if isStealPrompt(pr) then found = pr break end
+								end
+							end
+							-- also search pod itself
+							if not found then
+								for _, pr in ipairs(pod:GetDescendants()) do
+									if isStealPrompt(pr) then found = pr break end
+								end
+							end
+							if found then
+								nearest, best = found, d
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return nearest, best
+end
+
+local function cachePromptFns(prompt)
+	if Steal.Data[prompt] then return Steal.Data[prompt] end
+	local data = { hold = {}, trigger = {}, ready = true }
+	if getconnections then
+		pcall(function()
+			for _, c in ipairs(getconnections(prompt.PromptButtonHoldBegan)) do
+				if c.Function then table.insert(data.hold, c.Function) end
+			end
+		end)
+		pcall(function()
+			for _, c in ipairs(getconnections(prompt.Triggered)) do
+				if c.Function then table.insert(data.trigger, c.Function) end
+			end
+		end)
+		pcall(function()
+			for _, c in ipairs(getconnections(prompt.PromptButtonHoldEnded)) do
+				-- ignore
+			end
+		end)
+	end
+	Steal.Data[prompt] = data
+	return data
+end
+
+local function fireFns(list)
+	for _, fn in ipairs(list) do
+		task.spawn(function()
+			pcall(fn)
+		end)
+	end
+end
+
+local function tryFirePrompt(prompt)
+	-- Method 1: native fireproximityprompt (many executors)
+	if fireproximityprompt then
+		pcall(function()
+			prompt.HoldDuration = 0
+			fireproximityprompt(prompt)
+		end)
+		pcall(function()
+			fireproximityprompt(prompt, 1)
+		end)
+	end
+	-- Method 2: cached connections
+	local data = cachePromptFns(prompt)
+	fireFns(data.hold)
+	task.wait(0.05)
+	fireFns(data.trigger)
+end
+
+local function executeSteal(prompt)
+	if isStealing or not prompt or not prompt.Parent then return end
+	if tick() - lastStealAt < Steal.Cooldown then return end
+
+	local data = cachePromptFns(prompt)
+	if not data.ready then return end
+
+	data.ready = false
+	isStealing = true
+	stealStartTime = tick()
+	lastStealAt = tick()
+	stats.attempts += 1
+	setStatus(("Stealing… (%.0f studs)"):format(promptDistance(prompt)))
+
+	task.spawn(function()
+		local ok = pcall(function()
+			if Steal.Mode == "instant" then
+				-- bypass hold: set duration 0 + fire
+				pcall(function() prompt.HoldDuration = 0 end)
+				tryFirePrompt(prompt)
+				task.wait(0.12)
+			else
+				-- half mode: hold connections then trigger when in range
+				fireFns(data.hold)
+				task.wait(Steal.HalfHoldMin)
+				local inRange = promptDistance(prompt) <= Steal.HalfFireRange
+				local deadline = tick() + Steal.HalfHoldMax
+				while tick() < deadline and prompt.Parent do
+					if promptDistance(prompt) <= Steal.HalfFireRange then
+						if not inRange then
+							task.wait(Steal.HalfEntryDelay)
+						end
+						-- trigger + fireproximityprompt
+						pcall(function() prompt.HoldDuration = 0 end)
+						fireFns(data.trigger)
+						if fireproximityprompt then
+							pcall(fireproximityprompt, prompt)
+						end
+						break
+					end
+					task.wait()
+				end
+			end
+		end)
+
+		if ok then
+			stats.success += 1
+		end
+		task.wait(0.05)
+		data.ready = true
+		isStealing = false
+		if Steal.Enabled then
+			setStatus("Scanning…")
+		else
+			setStatus("Idle")
+		end
+		refreshStats()
+	end)
+end
+
+local function startAuto()
+	if autoConn then return end
+	autoConn = RunService.Heartbeat:Connect(function()
+		if not Steal.Enabled or isStealing then return end
+		local p = findNearestPrompt()
+		if p then
+			executeSteal(p)
+		end
+	end)
+end
+
+local function stopAuto()
+	if autoConn then
+		autoConn:Disconnect()
+		autoConn = nil
+	end
+	isStealing = false
+end
+
+----------------------------------------------------------------------
+-- UI HELPERS
+----------------------------------------------------------------------
+local function new(class, props, parent)
+	local o = Instance.new(class)
+	if props then for k, v in pairs(props) do o[k] = v end end
+	if parent then o.Parent = parent end
+	return o
+end
+local function corner(o, r)
+	return new("UICorner", { CornerRadius = UDim.new(0, r or 10) }, o)
+end
+local function stroke(o, th, col)
+	return new("UIStroke", {
+		Thickness = th or 1,
+		Color = col or Color3.fromRGB(70, 90, 140),
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, o)
+end
+
+local rgb = Color3.fromRGB
+local WHITE = rgb(245, 247, 255)
+local ACCENT = rgb(70, 130, 255)
+local GREEN = rgb(80, 220, 120)
+local RED = rgb(255, 90, 90)
+local BG = rgb(12, 14, 22)
+local CARD = rgb(20, 24, 36)
+local BTN = rgb(28, 34, 52)
+
+local statusLabel
+local statsLabel
+function setStatus(t)
+	if statusLabel then statusLabel.Text = t end
+end
+function refreshStats()
+	if statsLabel then
+		statsLabel.Text = ("Attempts %d  ·  OK %d"):format(stats.attempts, stats.success)
+	end
+end
+
+-- destroy old
+do
+	local old = PlayerGui:FindFirstChild("AutoStealCleanGui")
+	if old then old:Destroy() end
+	old = PlayerGui:FindFirstChild("StealProgressScreenGui")
+	if old then old:Destroy() end
+end
+
+local gui = new("ScreenGui", {
+	Name = "AutoStealCleanGui",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	DisplayOrder = 120,
+}, PlayerGui)
+
+----------------------------------------------------------------------
+-- MAIN PANEL
+----------------------------------------------------------------------
+local main = new("Frame", {
+	Name = "Main",
+	Size = UDim2.fromOffset(320, 340),
+	Position = UDim2.new(0, 16, 0.5, -170),
+	BackgroundColor3 = BG,
+	BorderSizePixel = 0,
+	Active = true,
+}, gui)
+corner(main, 14)
+stroke(main, 1.5, ACCENT)
+
+-- top bar
+local top = new("Frame", {
+	Size = UDim2.new(1, 0, 0, 44),
+	BackgroundColor3 = rgb(8, 10, 16),
+	BorderSizePixel = 0,
+}, main)
+corner(top, 14)
+new("Frame", {
+	Size = UDim2.new(1, 0, 0, 16),
+	Position = UDim2.new(0, 0, 1, -16),
+	BackgroundColor3 = rgb(8, 10, 16),
+	BorderSizePixel = 0,
+}, top)
+
+new("TextLabel", {
+	BackgroundTransparency = 1,
+	Text = "🐾  AUTO STEAL",
+	Font = Enum.Font.GothamBlack,
+	TextSize = 15,
+	TextColor3 = WHITE,
+	Position = UDim2.new(0, 14, 0, 6),
+	Size = UDim2.new(1, -80, 0, 20),
+	TextXAlignment = Enum.TextXAlignment.Left,
+}, top)
+new("TextLabel", {
+	BackgroundTransparency = 1,
+	Text = "Break & Steal  ·  clean UI",
+	Font = Enum.Font.Gotham,
+	TextSize = 10,
+	TextColor3 = rgb(140, 150, 175),
+	Position = UDim2.new(0, 14, 0, 24),
+	Size = UDim2.new(1, -80, 0, 14),
+	TextXAlignment = Enum.TextXAlignment.Left,
+}, top)
+
+local closeBtn = new("TextButton", {
+	Text = "✕",
+	Font = Enum.Font.GothamBold,
+	TextSize = 14,
+	TextColor3 = rgb(255, 140, 140),
+	BackgroundColor3 = rgb(40, 20, 28),
+	Size = UDim2.fromOffset(28, 28),
+	Position = UDim2.new(1, -36, 0.5, -14),
+	BorderSizePixel = 0,
+	AutoButtonColor = false,
+}, top)
+corner(closeBtn, 8)
+
+-- drag main
+do
+	local dragging, start, startPos = false, nil, nil
+	top.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging, start, startPos = true, i.Position, main.Position
+			i.Changed:Connect(function()
+				if i.UserInputState == Enum.UserInputState.End then dragging = false end
+			end)
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if not dragging then return end
+		if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+			local d = i.Position - start
+			main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+		end
+	end)
+end
+
+local body = new("ScrollingFrame", {
+	Size = UDim2.new(1, -20, 1, -56),
+	Position = UDim2.new(0, 10, 0, 48),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 3,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	ScrollingDirection = Enum.ScrollingDirection.Y,
+}, main)
+new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, body)
+new("UIPadding", { PaddingBottom = UDim.new(0, 8) }, body)
+
+local function card(title)
+	local f = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = CARD,
+		BorderSizePixel = 0,
+		LayoutOrder = #body:GetChildren(),
+	}, body)
+	corner(f, 12)
+	stroke(f, 1, rgb(40, 50, 75))
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, f)
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 10),
+		PaddingLeft = UDim.new(0, 12),
+		PaddingRight = UDim.new(0, 12),
+	}, f)
+	new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = title,
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		TextColor3 = ACCENT,
+		Size = UDim2.new(1, 0, 0, 16),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = 0,
+	}, f)
+	return f
+end
+
+local function toggleRow(parent, text, default, cb)
+	local row = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundTransparency = 1,
+		LayoutOrder = #parent:GetChildren(),
+	}, parent)
+	new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = text,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = WHITE,
+		Size = UDim2.new(1, -54, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, row)
+	local track = new("Frame", {
+		Size = UDim2.fromOffset(44, 24),
+		Position = UDim2.new(1, -44, 0.5, -12),
+		BackgroundColor3 = default and ACCENT or rgb(50, 55, 70),
+		BorderSizePixel = 0,
+	}, row)
+	corner(track, 12)
+	local knob = new("Frame", {
+		Size = UDim2.fromOffset(18, 18),
+		Position = UDim2.new(default and 1 or 0, default and -21 or 3, 0.5, -9),
+		BackgroundColor3 = WHITE,
+		BorderSizePixel = 0,
+	}, track)
+	corner(knob, 9)
+	local on = default
+	local btn = new("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "",
+		ZIndex = 2,
+	}, row)
+	btn.MouseButton1Click:Connect(function()
+		on = not on
+		TweenService:Create(track, TweenInfo.new(0.15), {
+			BackgroundColor3 = on and ACCENT or rgb(50, 55, 70),
+		}):Play()
+		TweenService:Create(knob, TweenInfo.new(0.15), {
+			Position = UDim2.new(on and 1 or 0, on and -21 or 3, 0.5, -9),
+		}):Play()
+		cb(on)
+	end)
+	return function(v)
+		on = v
+		track.BackgroundColor3 = on and ACCENT or rgb(50, 55, 70)
+		knob.Position = UDim2.new(on and 1 or 0, on and -21 or 3, 0.5, -9)
+	end
+end
+
+local function hint(parent, text)
+	new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = text,
+		Font = Enum.Font.Gotham,
+		TextSize = 11,
+		TextColor3 = rgb(130, 140, 160),
+		TextWrapped = true,
+		Size = UDim2.new(1, 0, 0, 28),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = #parent:GetChildren(),
+	}, parent)
+end
+
+local function pillBtn(parent, text, cb)
+	local b = new("TextButton", {
+		Text = text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		TextColor3 = WHITE,
+		BackgroundColor3 = BTN,
+		Size = UDim2.new(1, 0, 0, 32),
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		LayoutOrder = #parent:GetChildren(),
+	}, parent)
+	corner(b, 10)
+	stroke(b, 1, rgb(55, 70, 110))
+	b.MouseButton1Click:Connect(cb)
+	return b
+end
+
+----------------------------------------------------------------------
+-- CONTROLS
+----------------------------------------------------------------------
+do
+	local c = card("⚡ STEAL")
+	toggleRow(c, "Auto Steal", false, function(v)
+		Steal.Enabled = v
+		if v then
+			startAuto()
+			setStatus("Scanning…")
+		else
+			stopAuto()
+			setStatus("Idle")
+		end
+	end)
+	hint(c, "Mencari prompt Steal di plot orang lain dalam radius.")
+
+	local modeBtn = pillBtn(c, "Mode: HALF (aman)", function(b)
+		if Steal.Mode == "half" then
+			Steal.Mode = "instant"
+			b.Text = "Mode: INSTANT (cepat)"
+		else
+			Steal.Mode = "half"
+			b.Text = "Mode: HALF (aman)"
+		end
+	end)
+
+	pillBtn(c, "Steal sekali (terdekat)", function()
+		local p = findNearestPrompt()
+		if not p then
+			setStatus("Tidak ada prompt di radius")
+			return
+		end
+		executeSteal(p)
+	end)
+end
+
+do
+	local c = card("📏 RADIUS")
+	local val = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = ("Radius: %d studs"):format(Steal.Radius),
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = WHITE,
+		Size = UDim2.new(1, 0, 0, 18),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = 1,
+	}, c)
+	local row = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 28),
+		BackgroundTransparency = 1,
+		LayoutOrder = 2,
+	}, c)
+	for _, step in ipairs({ -10, -5, 5, 10 }) do
+		local b = new("TextButton", {
+			Text = (step > 0 and "+" or "") .. tostring(step),
+			Font = Enum.Font.GothamBold,
+			TextSize = 12,
+			TextColor3 = WHITE,
+			BackgroundColor3 = BTN,
+			Size = UDim2.new(0.23, 0, 1, 0),
+			Position = UDim2.new((({ [-10] = 0, [-5] = 0.25, [5] = 0.5, [10] = 0.75 })[step]), 2, 0, 0),
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+		}, row)
+		corner(b, 8)
+		b.MouseButton1Click:Connect(function()
+			Steal.Radius = math.clamp(Steal.Radius + step, 10, 150)
+			val.Text = ("Radius: %d studs"):format(Steal.Radius)
+		end)
+	end
+end
+
+do
+	local c = card("📊 STATUS")
+	statusLabel = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = "Idle",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = GREEN,
+		Size = UDim2.new(1, 0, 0, 20),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = 1,
+	}, c)
+	statsLabel = new("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = "Attempts 0  ·  OK 0",
+		Font = Enum.Font.Gotham,
+		TextSize = 11,
+		TextColor3 = rgb(150, 160, 180),
+		Size = UDim2.new(1, 0, 0, 16),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = 2,
+	}, c)
+end
+
+closeBtn.MouseButton1Click:Connect(function()
+	stopAuto()
+	Steal.Enabled = false
+	gui:Destroy()
+end)
+
+----------------------------------------------------------------------
+-- PROGRESS PILL (bawah layar, bisa digeser)
+----------------------------------------------------------------------
+do
+	local spFrame = new("Frame", {
+		Name = "StealProgress",
+		Size = UDim2.fromOffset(300, 26),
+		Position = UDim2.new(0.5, 0, 1, -88),
+		AnchorPoint = Vector2.new(0.5, 1),
+		BackgroundColor3 = rgb(16, 18, 28),
+		BorderSizePixel = 0,
+		ZIndex = 50,
+	}, gui)
+	corner(spFrame, 13)
+	stroke(spFrame, 1.5, rgb(255, 255, 255))
+	spFrame:FindFirstChildOfClass("UIStroke").Transparency = 0.45
+
+	local fill = new("Frame", {
+		Size = UDim2.new(0, 0, 1, -6),
+		Position = UDim2.new(0, 3, 0, 3),
+		BackgroundColor3 = rgb(200, 40, 40),
+		BorderSizePixel = 0,
+		ZIndex = 51,
+	}, spFrame)
+	corner(fill, 10)
+	new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, rgb(120, 0, 0)),
+			ColorSequenceKeypoint.new(0.5, rgb(200, 30, 30)),
+			ColorSequenceKeypoint.new(1, rgb(255, 80, 80)),
+		}),
+		Rotation = 90,
+	}, fill)
+
+	local pct = new("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "UNREADY",
+		Font = Enum.Font.GothamBold,
+		TextSize = 13,
+		TextColor3 = WHITE,
+		ZIndex = 52,
+	}, spFrame)
+
+	local last = 0
+	RunService.RenderStepped:Connect(function()
+		if not spFrame.Parent then return end
+		local target = 0
+		if isStealing and stealStartTime > 0 then
+			target = math.clamp((tick() - stealStartTime) / 1.2, 0, 1)
+		elseif Steal.Enabled then
+			target = findNearestPrompt() and 1 or 0.15
+		end
+		last = last + (target - last) * 0.18
+		fill.Size = UDim2.new(math.clamp(last, 0, 1), -6 * last, 1, -6)
+		if last >= 0.85 then
+			pct.Text = "READY"
+			pct.TextColor3 = GREEN
+			fill.BackgroundColor3 = rgb(40, 180, 90)
+		else
+			pct.Text = Steal.Enabled and (isStealing and "STEALING" or "SCANNING") or "UNREADY"
+			pct.TextColor3 = WHITE
+			fill.BackgroundColor3 = rgb(200, 40, 40)
+		end
+	end)
+
+	-- drag pill
+	local dragBtn = new("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "",
+		ZIndex = 53,
+	}, spFrame)
+	local dragging, start, startPos = false, nil, nil
+	dragBtn.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging, start, startPos = true, i.Position, spFrame.Position
+			i.Changed:Connect(function()
+				if i.UserInputState == Enum.UserInputState.End then dragging = false end
+			end)
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if not dragging then return end
+		if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+			local d = i.Position - start
+			spFrame.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + d.X,
+				startPos.Y.Scale, startPos.Y.Offset + d.Y
+			)
+		end
+	end)
+end
+
+setStatus("Idle — nyalakan Auto Steal")
+refreshStats()
+print("[AutoSteal] loaded — UI clean, multi-method steal")
